@@ -1,0 +1,233 @@
+name: release
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, for example v1.0.0
+        required: true
+        type: string
+      ref:
+        description: Git ref to build for a manual release
+        required: false
+        default: main
+        type: string
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  APP_PROJECT: FinalAgent/FinalAgent.csproj
+  CONFIGURATION: Release
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  SOLUTION_FILE: FinalAgent.slnx
+
+jobs:
+  validate:
+    name: Validate release build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            FinalAgent/packages.lock.json
+            FinalAgent.Tests/packages.lock.json
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION_FILE }} --locked-mode
+
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Test
+        run: >
+          dotnet test ${{ env.SOLUTION_FILE }}
+          --configuration ${{ env.CONFIGURATION }}
+          --no-restore
+          --logger "trx;LogFileName=release-test-results.trx"
+          --results-directory ./artifacts/test-results
+
+      - name: Upload validation test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-test-results
+          path: artifacts/test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    name: Publish ${{ matrix.rid }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            rid: win-x64
+            artifact_name: app-win-x64
+          - runner: ubuntu-24.04
+            rid: linux-x64
+            artifact_name: app-linux-x64
+          - runner: ubuntu-24.04-arm
+            rid: linux-arm64
+            artifact_name: app-linux-arm64
+          - runner: macos-15-intel
+            rid: osx-x64
+            artifact_name: app-osx-x64
+          - runner: macos-15
+            rid: osx-arm64
+            artifact_name: app-osx-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            FinalAgent/packages.lock.json
+            FinalAgent.Tests/packages.lock.json
+
+      - name: Install Linux Native AOT prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang zlib1g-dev
+
+      - name: Prepare artifact directories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/artifacts/publish", "$env:GITHUB_WORKSPACE/artifacts/packages" | Out-Null
+
+      - name: Publish Native AOT
+        run: >
+          dotnet publish ${{ env.APP_PROJECT }}
+          --configuration ${{ env.CONFIGURATION }}
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          --output ./artifacts/publish/${{ matrix.rid }}
+
+      - name: Package published output on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archivePath = Join-Path $env:GITHUB_WORKSPACE "artifacts/packages/FinalAgent-$env:RELEASE_TAG-${{ matrix.rid }}.zip"
+          if (Test-Path $archivePath) {
+            Remove-Item $archivePath -Force
+          }
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE/artifacts/publish/${{ matrix.rid }}/*" -DestinationPath $archivePath
+
+      - name: Package published output on Linux and macOS
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          archive_path="$GITHUB_WORKSPACE/artifacts/packages/FinalAgent-${RELEASE_TAG}-${{ matrix.rid }}.zip"
+          publish_dir="$GITHUB_WORKSPACE/artifacts/publish/${{ matrix.rid }}"
+          cd "$publish_dir"
+          zip -r "$archive_path" .
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ./artifacts/packages/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish GitHub release
+    needs: publish
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          fetch-depth: 0
+
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: ./artifacts/release
+
+      - name: Create release notes
+        id: release_notes
+        shell: bash
+        run: |
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          previous_tag="$(git tag --sort=-creatordate | grep -Fxv "$RELEASE_TAG" | head -n 1 || true)"
+
+          if [[ -n "$previous_tag" ]]; then
+            commit_lines="$(git log "${previous_tag}..HEAD" --pretty=format:'- %s (%h)' --no-merges)"
+          else
+            commit_lines="$(git log HEAD --pretty=format:'- %s (%h)' --no-merges)"
+          fi
+
+          package_lines="$(find "$GITHUB_WORKSPACE/artifacts/release" -type f -name '*.zip' -printf -- '- %f\n' | sort)"
+
+          {
+            echo "# FinalAgent $RELEASE_TAG"
+            echo
+            echo "## Packages"
+            echo
+            echo "${package_lines:-- No packages were produced.}"
+            echo
+            echo "## Commit messages"
+            echo
+            echo "${commit_lines:-- Initial release.}"
+          } > "$notes_file"
+
+          echo "path=$notes_file" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="$RELEASE_TAG"
+          title="FinalAgent $tag"
+          target_sha="$(git rev-parse HEAD)"
+          mapfile -t assets < <(find "$GITHUB_WORKSPACE/artifacts/release" -type f -name '*.zip' | sort)
+
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No packaged artifacts were found." >&2
+            exit 1
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+            gh release edit "$tag" --title "$title" --notes-file "${{ steps.release_notes.outputs.path }}"
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --title "$title" \
+              --notes-file "${{ steps.release_notes.outputs.path }}" \
+              --target "$target_sha"
+          fi
