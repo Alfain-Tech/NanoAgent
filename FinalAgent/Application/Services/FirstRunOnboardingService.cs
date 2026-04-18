@@ -1,4 +1,5 @@
 using FinalAgent.Application.Abstractions;
+using FinalAgent.Application.Exceptions;
 using FinalAgent.Application.Logging;
 using FinalAgent.Application.Models;
 using FinalAgent.Domain.Abstractions;
@@ -9,13 +10,23 @@ namespace FinalAgent.Application.Services;
 
 internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
 {
-    private static readonly IReadOnlyList<string> ProviderOptions =
+    private static readonly SelectionPromptOption<OnboardingProviderChoice>[] ProviderOptions =
     [
-        "OpenAI",
-        "OpenAI-compatible provider"
+        new(
+            "OpenAI",
+            OnboardingProviderChoice.OpenAi,
+            "Use the official OpenAI API with only an API key."),
+        new(
+            "OpenAI-compatible provider",
+            OnboardingProviderChoice.OpenAiCompatible,
+            "Use a custom base URL and API key.")
     ];
 
-    private readonly IUserPrompt _userPrompt;
+    private readonly ISelectionPrompt _selectionPrompt;
+    private readonly ITextPrompt _textPrompt;
+    private readonly ISecretPrompt _secretPrompt;
+    private readonly IConfirmationPrompt _confirmationPrompt;
+    private readonly IStatusMessageWriter _statusMessageWriter;
     private readonly IOnboardingInputValidator _inputValidator;
     private readonly IAgentConfigurationStore _configurationStore;
     private readonly IApiKeySecretStore _secretStore;
@@ -23,14 +34,22 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
     private readonly ILogger<FirstRunOnboardingService> _logger;
 
     public FirstRunOnboardingService(
-        IUserPrompt userPrompt,
+        ISelectionPrompt selectionPrompt,
+        ITextPrompt textPrompt,
+        ISecretPrompt secretPrompt,
+        IConfirmationPrompt confirmationPrompt,
+        IStatusMessageWriter statusMessageWriter,
         IOnboardingInputValidator inputValidator,
         IAgentConfigurationStore configurationStore,
         IApiKeySecretStore secretStore,
         IAgentProviderProfileFactory profileFactory,
         ILogger<FirstRunOnboardingService> logger)
     {
-        _userPrompt = userPrompt;
+        _selectionPrompt = selectionPrompt;
+        _textPrompt = textPrompt;
+        _secretPrompt = secretPrompt;
+        _confirmationPrompt = confirmationPrompt;
+        _statusMessageWriter = statusMessageWriter;
         _inputValidator = inputValidator;
         _configurationStore = configurationStore;
         _secretStore = secretStore;
@@ -49,40 +68,69 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
                 _logger,
                 existingConfiguration.ProviderKind.ToDisplayName());
 
+            await _statusMessageWriter.ShowInfoAsync(
+                $"Using existing provider configuration: {existingConfiguration.ProviderKind.ToDisplayName()}.",
+                cancellationToken);
+
             return new OnboardingResult(existingConfiguration, WasOnboardedDuringCurrentRun: false);
         }
 
         if (existingConfiguration is not null || !string.IsNullOrWhiteSpace(existingApiKey))
         {
             ApplicationLogMessages.IncompleteOnboardingDetected(_logger);
+
+            await _statusMessageWriter.ShowErrorAsync(
+                "Found incomplete local provider settings. FinalAgent needs to reconfigure them before continuing.",
+                cancellationToken);
+
+            bool shouldContinue = await _confirmationPrompt.PromptAsync(
+                new ConfirmationPromptRequest(
+                    "Continue and overwrite the incomplete local setup?",
+                    "Choose Yes to enter a fresh provider configuration, or No to cancel startup."),
+                cancellationToken);
+
+            if (!shouldContinue)
+            {
+                throw new PromptCancelledException("The onboarding flow was cancelled before reconfiguration.");
+            }
         }
 
-        await _userPrompt.ShowMessageAsync("Welcome to FinalAgent. Let's configure your provider for first run.", cancellationToken);
-
-        int selectedOption = await _userPrompt.PromptSelectionAsync(
-            "Choose the provider you want to use:",
-            ProviderOptions,
+        await _statusMessageWriter.ShowInfoAsync(
+            "Welcome to FinalAgent. Let's configure your provider for first run.",
             cancellationToken);
 
-        AgentProviderProfile profile = selectedOption == 0
+        OnboardingProviderChoice providerChoice = await _selectionPrompt.PromptAsync(
+            new SelectionPromptRequest<OnboardingProviderChoice>(
+                "Choose the provider you want to use",
+                ProviderOptions,
+                "Pick how FinalAgent should connect to your model provider on this machine."),
+            cancellationToken);
+
+        AgentProviderProfile profile = providerChoice == OnboardingProviderChoice.OpenAi
             ? _profileFactory.CreateOpenAi()
             : _profileFactory.CreateCompatible(
                 await PromptUntilValidAsync(
-                    "Base URL",
+                    cancellationToken => _textPrompt.PromptAsync(
+                        new TextPromptRequest(
+                            "Base URL",
+                            "Enter the OpenAI-compatible base URL, for example https://api.example.com/v1."),
+                        cancellationToken),
                     _inputValidator.ValidateBaseUrl,
-                    useSecretPrompt: false,
                     cancellationToken));
 
         string apiKey = await PromptUntilValidAsync(
-            "API key",
+            cancellationToken => _secretPrompt.PromptAsync(
+                new SecretPromptRequest(
+                    "API key",
+                    "Paste the API key for the selected provider."),
+                cancellationToken),
             _inputValidator.ValidateApiKey,
-            useSecretPrompt: true,
             cancellationToken);
 
         await _configurationStore.SaveAsync(profile, cancellationToken);
         await _secretStore.SaveAsync(apiKey, cancellationToken);
 
-        await _userPrompt.ShowMessageAsync(
+        await _statusMessageWriter.ShowSuccessAsync(
             $"Onboarding complete. Provider: {profile.ProviderKind.ToDisplayName()}.",
             cancellationToken);
 
@@ -92,18 +140,15 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
     }
 
     private async Task<string> PromptUntilValidAsync(
-        string fieldLabel,
+        Func<CancellationToken, Task<string>> promptValue,
         Func<string?, InputValidationResult> validate,
-        bool useSecretPrompt,
         CancellationToken cancellationToken)
     {
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string rawValue = useSecretPrompt
-                ? await _userPrompt.PromptSecretAsync($"{fieldLabel}:", cancellationToken)
-                : await _userPrompt.PromptAsync($"{fieldLabel}:", cancellationToken);
+            string rawValue = await promptValue(cancellationToken);
 
             InputValidationResult validationResult = validate(rawValue);
             if (validationResult.IsValid)
@@ -111,7 +156,7 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
                 return validationResult.NormalizedValue!;
             }
 
-            await _userPrompt.ShowMessageAsync(validationResult.ErrorMessage!, cancellationToken);
+            await _statusMessageWriter.ShowErrorAsync(validationResult.ErrorMessage!, cancellationToken);
         }
     }
 }

@@ -1,4 +1,5 @@
 using FinalAgent.Application.Abstractions;
+using FinalAgent.Application.Exceptions;
 using FinalAgent.Application.Models;
 using FinalAgent.Application.Services;
 using FinalAgent.Domain.Abstractions;
@@ -16,7 +17,17 @@ public sealed class FirstRunOnboardingServiceTests
     {
         AgentProviderProfile existingProfile = new(ProviderKind.OpenAi, null);
 
-        Mock<IUserPrompt> userPrompt = new(MockBehavior.Strict);
+        Mock<ISelectionPrompt> selectionPrompt = new(MockBehavior.Strict);
+        Mock<ITextPrompt> textPrompt = new(MockBehavior.Strict);
+        Mock<ISecretPrompt> secretPrompt = new(MockBehavior.Strict);
+        Mock<IConfirmationPrompt> confirmationPrompt = new(MockBehavior.Strict);
+        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
+        statusMessageWriter
+            .Setup(writer => writer.ShowInfoAsync(
+                "Using existing provider configuration: OpenAI.",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         Mock<IOnboardingInputValidator> inputValidator = new(MockBehavior.Strict);
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
         configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(existingProfile);
@@ -25,7 +36,11 @@ public sealed class FirstRunOnboardingServiceTests
         Mock<IAgentProviderProfileFactory> profileFactory = new(MockBehavior.Strict);
 
         FirstRunOnboardingService sut = CreateSut(
-            userPrompt.Object,
+            selectionPrompt.Object,
+            textPrompt.Object,
+            secretPrompt.Object,
+            confirmationPrompt.Object,
+            statusMessageWriter.Object,
             inputValidator.Object,
             configurationStore.Object,
             secretStore.Object,
@@ -34,7 +49,11 @@ public sealed class FirstRunOnboardingServiceTests
         OnboardingResult result = await sut.EnsureOnboardedAsync(CancellationToken.None);
 
         result.Should().Be(new OnboardingResult(existingProfile, false));
-        userPrompt.VerifyNoOtherCalls();
+        selectionPrompt.VerifyNoOtherCalls();
+        textPrompt.VerifyNoOtherCalls();
+        secretPrompt.VerifyNoOtherCalls();
+        confirmationPrompt.VerifyNoOtherCalls();
+        statusMessageWriter.VerifyAll();
         configurationStore.Verify(store => store.SaveAsync(It.IsAny<AgentProviderProfile>(), It.IsAny<CancellationToken>()), Times.Never);
         secretStore.Verify(store => store.SaveAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -44,13 +63,36 @@ public sealed class FirstRunOnboardingServiceTests
     {
         AgentProviderProfile openAiProfile = new(ProviderKind.OpenAi, null);
 
-        Mock<IUserPrompt> userPrompt = new(MockBehavior.Strict);
-        userPrompt.Setup(prompt => prompt.ShowMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        userPrompt.Setup(prompt => prompt.PromptSelectionAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        userPrompt.Setup(prompt => prompt.PromptSecretAsync("API key:", It.IsAny<CancellationToken>())).ReturnsAsync("  sk-openai  ");
+        Mock<ISelectionPrompt> selectionPrompt = new(MockBehavior.Strict);
+        selectionPrompt
+            .Setup(prompt => prompt.PromptAsync(It.IsAny<SelectionPromptRequest<OnboardingProviderChoice>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OnboardingProviderChoice.OpenAi);
+
+        Mock<ITextPrompt> textPrompt = new(MockBehavior.Strict);
+
+        Mock<ISecretPrompt> secretPrompt = new(MockBehavior.Strict);
+        secretPrompt
+            .Setup(prompt => prompt.PromptAsync(It.IsAny<SecretPromptRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("  sk-openai  ");
+
+        Mock<IConfirmationPrompt> confirmationPrompt = new(MockBehavior.Strict);
+
+        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
+        statusMessageWriter
+            .Setup(writer => writer.ShowInfoAsync(
+                "Welcome to FinalAgent. Let's configure your provider for first run.",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        statusMessageWriter
+            .Setup(writer => writer.ShowSuccessAsync(
+                "Onboarding complete. Provider: OpenAI.",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         Mock<IOnboardingInputValidator> inputValidator = new(MockBehavior.Strict);
-        inputValidator.Setup(validator => validator.ValidateApiKey("  sk-openai  ")).Returns(InputValidationResult.Success("sk-openai"));
+        inputValidator
+            .Setup(validator => validator.ValidateApiKey("  sk-openai  "))
+            .Returns(InputValidationResult.Success("sk-openai"));
 
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
         configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((AgentProviderProfile?)null);
@@ -64,7 +106,11 @@ public sealed class FirstRunOnboardingServiceTests
         profileFactory.Setup(factory => factory.CreateOpenAi()).Returns(openAiProfile);
 
         FirstRunOnboardingService sut = CreateSut(
-            userPrompt.Object,
+            selectionPrompt.Object,
+            textPrompt.Object,
+            secretPrompt.Object,
+            confirmationPrompt.Object,
+            statusMessageWriter.Object,
             inputValidator.Object,
             configurationStore.Object,
             secretStore.Object,
@@ -74,9 +120,10 @@ public sealed class FirstRunOnboardingServiceTests
 
         result.Should().Be(new OnboardingResult(openAiProfile, true));
         profileFactory.Verify(factory => factory.CreateOpenAi(), Times.Once);
-        userPrompt.Verify(prompt => prompt.PromptAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        textPrompt.VerifyNoOtherCalls();
         configurationStore.VerifyAll();
         secretStore.VerifyAll();
+        statusMessageWriter.VerifyAll();
     }
 
     [Fact]
@@ -84,19 +131,48 @@ public sealed class FirstRunOnboardingServiceTests
     {
         AgentProviderProfile compatibleProfile = new(ProviderKind.OpenAiCompatible, "https://compatible.example.com/v1");
 
-        Mock<IUserPrompt> userPrompt = new(MockBehavior.Strict);
-        userPrompt.Setup(prompt => prompt.ShowMessageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        userPrompt.Setup(prompt => prompt.PromptSelectionAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>())).ReturnsAsync(1);
-        userPrompt.SetupSequence(prompt => prompt.PromptAsync("Base URL:", It.IsAny<CancellationToken>()))
+        Mock<ISelectionPrompt> selectionPrompt = new(MockBehavior.Strict);
+        selectionPrompt
+            .Setup(prompt => prompt.PromptAsync(It.IsAny<SelectionPromptRequest<OnboardingProviderChoice>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OnboardingProviderChoice.OpenAiCompatible);
+
+        Mock<ITextPrompt> textPrompt = new(MockBehavior.Strict);
+        textPrompt
+            .SetupSequence(prompt => prompt.PromptAsync(It.IsAny<TextPromptRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("not-a-url")
             .ReturnsAsync("https://compatible.example.com/v1/");
-        userPrompt.Setup(prompt => prompt.PromptSecretAsync("API key:", It.IsAny<CancellationToken>())).ReturnsAsync("compatible-key");
+
+        Mock<ISecretPrompt> secretPrompt = new(MockBehavior.Strict);
+        secretPrompt
+            .Setup(prompt => prompt.PromptAsync(It.IsAny<SecretPromptRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("compatible-key");
+
+        Mock<IConfirmationPrompt> confirmationPrompt = new(MockBehavior.Strict);
+
+        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
+        statusMessageWriter
+            .Setup(writer => writer.ShowInfoAsync(
+                "Welcome to FinalAgent. Let's configure your provider for first run.",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        statusMessageWriter
+            .Setup(writer => writer.ShowErrorAsync(
+                "Base URL must be an absolute URL.",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        statusMessageWriter
+            .Setup(writer => writer.ShowSuccessAsync(
+                "Onboarding complete. Provider: OpenAI-compatible provider.",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         Mock<IOnboardingInputValidator> inputValidator = new(MockBehavior.Strict);
-        inputValidator.SetupSequence(validator => validator.ValidateBaseUrl(It.IsAny<string?>()))
+        inputValidator
+            .SetupSequence(validator => validator.ValidateBaseUrl(It.IsAny<string?>()))
             .Returns(InputValidationResult.Failure("Base URL must be an absolute URL."))
             .Returns(InputValidationResult.Success("https://compatible.example.com/v1"));
-        inputValidator.Setup(validator => validator.ValidateApiKey("compatible-key"))
+        inputValidator
+            .Setup(validator => validator.ValidateApiKey("compatible-key"))
             .Returns(InputValidationResult.Success("compatible-key"));
 
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
@@ -113,7 +189,11 @@ public sealed class FirstRunOnboardingServiceTests
             .Returns(compatibleProfile);
 
         FirstRunOnboardingService sut = CreateSut(
-            userPrompt.Object,
+            selectionPrompt.Object,
+            textPrompt.Object,
+            secretPrompt.Object,
+            confirmationPrompt.Object,
+            statusMessageWriter.Object,
             inputValidator.Object,
             configurationStore.Object,
             secretStore.Object,
@@ -122,19 +202,76 @@ public sealed class FirstRunOnboardingServiceTests
         OnboardingResult result = await sut.EnsureOnboardedAsync(CancellationToken.None);
 
         result.Should().Be(new OnboardingResult(compatibleProfile, true));
-        userPrompt.Verify(prompt => prompt.ShowMessageAsync("Base URL must be an absolute URL.", It.IsAny<CancellationToken>()), Times.Once);
         profileFactory.Verify(factory => factory.CreateCompatible("https://compatible.example.com/v1"), Times.Once);
+        statusMessageWriter.VerifyAll();
+    }
+
+    [Fact]
+    public async Task EnsureOnboardedAsync_Should_ThrowPromptCancelledException_When_UserDeclinesIncompleteSetupRecovery()
+    {
+        AgentProviderProfile existingProfile = new(ProviderKind.OpenAiCompatible, "https://compatible.example.com/v1");
+
+        Mock<ISelectionPrompt> selectionPrompt = new(MockBehavior.Strict);
+        Mock<ITextPrompt> textPrompt = new(MockBehavior.Strict);
+        Mock<ISecretPrompt> secretPrompt = new(MockBehavior.Strict);
+
+        Mock<IConfirmationPrompt> confirmationPrompt = new(MockBehavior.Strict);
+        confirmationPrompt
+            .Setup(prompt => prompt.PromptAsync(It.IsAny<ConfirmationPromptRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
+        statusMessageWriter
+            .Setup(writer => writer.ShowErrorAsync(
+                "Found incomplete local provider settings. FinalAgent needs to reconfigure them before continuing.",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        Mock<IOnboardingInputValidator> inputValidator = new(MockBehavior.Strict);
+        Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
+        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(existingProfile);
+
+        Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
+        secretStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
+
+        Mock<IAgentProviderProfileFactory> profileFactory = new(MockBehavior.Strict);
+
+        FirstRunOnboardingService sut = CreateSut(
+            selectionPrompt.Object,
+            textPrompt.Object,
+            secretPrompt.Object,
+            confirmationPrompt.Object,
+            statusMessageWriter.Object,
+            inputValidator.Object,
+            configurationStore.Object,
+            secretStore.Object,
+            profileFactory.Object);
+
+        Func<Task> action = () => sut.EnsureOnboardedAsync(CancellationToken.None);
+
+        await action.Should().ThrowAsync<PromptCancelledException>();
+        selectionPrompt.VerifyNoOtherCalls();
+        textPrompt.VerifyNoOtherCalls();
+        secretPrompt.VerifyNoOtherCalls();
     }
 
     private static FirstRunOnboardingService CreateSut(
-        IUserPrompt userPrompt,
+        ISelectionPrompt selectionPrompt,
+        ITextPrompt textPrompt,
+        ISecretPrompt secretPrompt,
+        IConfirmationPrompt confirmationPrompt,
+        IStatusMessageWriter statusMessageWriter,
         IOnboardingInputValidator inputValidator,
         IAgentConfigurationStore configurationStore,
         IApiKeySecretStore secretStore,
         IAgentProviderProfileFactory profileFactory)
     {
         return new FirstRunOnboardingService(
-            userPrompt,
+            selectionPrompt,
+            textPrompt,
+            secretPrompt,
+            confirmationPrompt,
+            statusMessageWriter,
             inputValidator,
             configurationStore,
             secretStore,

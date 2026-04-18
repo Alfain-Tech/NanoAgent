@@ -1,4 +1,5 @@
 using FinalAgent.Application.Abstractions;
+using FinalAgent.Application.Exceptions;
 using FinalAgent.ConsoleHost.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,7 +46,7 @@ internal sealed class ConsoleApplicationHostedService : BackgroundService
             _exitCodeTracker.Set(ExitCodes.Success);
             HostLogMessages.RunCompleted(_logger, _exitCodeTracker.ExitCode);
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (stoppingToken.IsCancellationRequested || exception is PromptCancelledException)
         {
             _exitCodeTracker.Set(ExitCodes.Cancelled);
             HostLogMessages.RunCancelled(_logger);
