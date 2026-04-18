@@ -13,12 +13,6 @@ internal static partial class ApplicationLogMessages
     [LoggerMessage(
         EventId = 1001,
         Level = LogLevel.Information,
-        Message = "Iteration {iteration}/{totalIterations}: {message}")]
-    public static partial void GreetingPublished(ILogger logger, int iteration, int totalIterations, string message);
-
-    [LoggerMessage(
-        EventId = 1002,
-        Level = LogLevel.Information,
         Message = "Application runner completed successfully.")]
     public static partial void RunnerCompleted(ILogger logger);
 }

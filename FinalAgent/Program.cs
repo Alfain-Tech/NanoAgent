@@ -3,6 +3,7 @@ using FinalAgent.ConsoleHost.DependencyInjection;
 using FinalAgent.ConsoleHost.Hosting;
 using FinalAgent.ConsoleHost.Logging;
 using FinalAgent.Infrastructure.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -39,6 +40,11 @@ internal static class Program
     private static IHost CreateHost(string[] args)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+
+        builder.Configuration.AddJsonFile(
+            Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+            optional: true,
+            reloadOnChange: false);
 
         builder.ConfigureConsoleHost();
 

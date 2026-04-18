@@ -11,17 +11,20 @@ namespace FinalAgent.Application.Services;
 internal sealed class GreetingApplicationRunner : IApplicationRunner
 {
     private readonly IGreetingComposer _greetingComposer;
+    private readonly IGreetingSink _greetingSink;
     private readonly ISystemClock _systemClock;
     private readonly ApplicationOptions _options;
     private readonly ILogger<GreetingApplicationRunner> _logger;
 
     public GreetingApplicationRunner(
         IGreetingComposer greetingComposer,
+        IGreetingSink greetingSink,
         ISystemClock systemClock,
         IOptions<ApplicationOptions> options,
         ILogger<GreetingApplicationRunner> logger)
     {
         _greetingComposer = greetingComposer;
+        _greetingSink = greetingSink;
         _systemClock = systemClock;
         _options = options.Value;
         _logger = logger;
@@ -43,7 +46,7 @@ internal sealed class GreetingApplicationRunner : IApplicationRunner
                 _systemClock.UtcNow);
 
             string message = _greetingComposer.Compose(context);
-            ApplicationLogMessages.GreetingPublished(_logger, iteration, _options.RepeatCount, message);
+            await _greetingSink.WriteAsync(message, cancellationToken);
 
             if (iteration < _options.RepeatCount && delay > TimeSpan.Zero)
             {
