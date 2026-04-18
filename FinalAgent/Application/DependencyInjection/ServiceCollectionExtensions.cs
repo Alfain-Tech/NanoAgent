@@ -13,9 +13,11 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddScoped<IApplicationRunner, AgentApplicationRunner>();
+        services.AddSingleton<IModelDiscoveryService, ModelDiscoveryService>();
         services.AddSingleton<IFirstRunOnboardingService, FirstRunOnboardingService>();
         services.AddSingleton<IOnboardingInputValidator, OnboardingInputValidator>();
         services.AddSingleton<IAgentProviderProfileFactory, AgentProviderProfileFactory>();
+        services.AddSingleton<IModelSelectionPolicy, RankedModelSelectionPolicy>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using FinalAgent.Infrastructure.Configuration;
 using FinalAgent.Infrastructure.Secrets;
 using FinalAgent.Application.Abstractions;
+using FinalAgent.Infrastructure.Models;
 using FinalAgent.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,9 +21,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IUserDataPathProvider, UserDataPathProvider>();
         services.AddSingleton<IAgentConfigurationStore, JsonAgentConfigurationStore>();
         services.AddSingleton<IApiKeySecretStore, ApiKeySecretStore>();
+        services.AddSingleton<IModelCache, InMemoryModelCache>();
+        services.AddSingleton<IModelSelectionConfigurationAccessor, ModelSelectionConfigurationAccessor>();
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton<IPlatformCredentialStore>(CreatePlatformCredentialStore());
         services.AddSingleton<IValidateOptions<ApplicationOptions>, ApplicationOptionsValidator>();
+        services.AddHttpClient<IModelProviderClient, OpenAiCompatibleModelProviderClient>();
 
         services
             .AddOptions<ApplicationOptions>()

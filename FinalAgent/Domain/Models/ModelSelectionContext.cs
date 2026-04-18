@@ -1,0 +1,6 @@
+namespace FinalAgent.Domain.Models;
+
+public sealed record ModelSelectionContext(
+    IReadOnlyList<AvailableModel> AvailableModels,
+    string? ConfiguredDefaultModel,
+    IReadOnlyList<string> RankedPreferenceList);

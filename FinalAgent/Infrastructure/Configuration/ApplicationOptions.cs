@@ -7,4 +7,8 @@ public sealed class ApplicationOptions
     public string ProductName { get; set; } = string.Empty;
 
     public string StorageDirectoryName { get; set; } = string.Empty;
+
+    public ApplicationDefaultsOptions Defaults { get; set; } = new();
+
+    public ModelSelectionOptions ModelSelection { get; set; } = new();
 }

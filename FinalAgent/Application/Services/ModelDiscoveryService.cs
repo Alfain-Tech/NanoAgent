@@ -1,0 +1,140 @@
+using System.Security.Cryptography;
+using System.Text;
+using FinalAgent.Application.Abstractions;
+using FinalAgent.Application.Exceptions;
+using FinalAgent.Application.Logging;
+using FinalAgent.Application.Models;
+using FinalAgent.Domain.Abstractions;
+using FinalAgent.Domain.Models;
+using Microsoft.Extensions.Logging;
+
+namespace FinalAgent.Application.Services;
+
+internal sealed class ModelDiscoveryService : IModelDiscoveryService
+{
+    private readonly IAgentConfigurationStore _configurationStore;
+    private readonly IApiKeySecretStore _secretStore;
+    private readonly IModelProviderClient _modelProviderClient;
+    private readonly IModelCache _modelCache;
+    private readonly IModelSelectionPolicy _modelSelectionPolicy;
+    private readonly IModelSelectionConfigurationAccessor _configurationAccessor;
+    private readonly ILogger<ModelDiscoveryService> _logger;
+
+    public ModelDiscoveryService(
+        IAgentConfigurationStore configurationStore,
+        IApiKeySecretStore secretStore,
+        IModelProviderClient modelProviderClient,
+        IModelCache modelCache,
+        IModelSelectionPolicy modelSelectionPolicy,
+        IModelSelectionConfigurationAccessor configurationAccessor,
+        ILogger<ModelDiscoveryService> logger)
+    {
+        _configurationStore = configurationStore;
+        _secretStore = secretStore;
+        _modelProviderClient = modelProviderClient;
+        _modelCache = modelCache;
+        _modelSelectionPolicy = modelSelectionPolicy;
+        _configurationAccessor = configurationAccessor;
+        _logger = logger;
+    }
+
+    public async Task<ModelDiscoveryResult> DiscoverAndSelectAsync(CancellationToken cancellationToken)
+    {
+        AgentProviderProfile providerProfile = await _configurationStore.LoadAsync(cancellationToken)
+            ?? throw new ModelDiscoveryException(
+                "Model discovery cannot start because provider configuration is missing.");
+
+        string apiKey = await _secretStore.LoadAsync(cancellationToken)
+            ?? throw new ModelDiscoveryException(
+                "Model discovery cannot start because the API key is missing.");
+
+        ApplicationLogMessages.ModelDiscoveryStarted(
+            _logger,
+            providerProfile.ProviderKind.ToDisplayName());
+
+        ModelSelectionSettings settings = _configurationAccessor.GetSettings();
+
+        (IReadOnlyList<AvailableModel> models, bool hadDuplicates) = await LoadAvailableModelsAsync(
+            providerProfile,
+            apiKey,
+            settings.CacheDuration,
+            cancellationToken);
+
+        if (hadDuplicates)
+        {
+            ApplicationLogMessages.DuplicateModelsDetected(_logger);
+        }
+
+        ModelSelectionDecision selection = _modelSelectionPolicy.Select(
+            new ModelSelectionContext(
+                models,
+                settings.ConfiguredDefaultModel,
+                settings.RankedPreferenceList));
+
+        if (selection.ConfiguredDefaultStatus == ConfiguredDefaultModelStatus.NotFound &&
+            selection.ConfiguredDefaultModel is not null)
+        {
+            ApplicationLogMessages.ConfiguredDefaultModelNotFound(
+                _logger,
+                selection.ConfiguredDefaultModel);
+        }
+
+        return new ModelDiscoveryResult(
+            models,
+            selection.SelectedModelId,
+            selection.SelectionSource,
+            selection.ConfiguredDefaultStatus,
+            selection.ConfiguredDefaultModel,
+            hadDuplicates);
+    }
+
+    private async Task<(IReadOnlyList<AvailableModel> Models, bool HadDuplicates)> LoadAvailableModelsAsync(
+        AgentProviderProfile providerProfile,
+        string apiKey,
+        TimeSpan cacheDuration,
+        CancellationToken cancellationToken)
+    {
+        string cacheKey = BuildCacheKey(providerProfile, apiKey);
+        IReadOnlyList<AvailableModel> cachedModels = await _modelCache.GetOrCreateAsync(
+            cacheKey,
+            cacheDuration,
+            fetchToken => _modelProviderClient.GetAvailableModelsAsync(
+                providerProfile,
+                apiKey,
+                fetchToken),
+            cancellationToken);
+
+        bool hadDuplicates = false;
+        List<AvailableModel> normalizedModels = [];
+        HashSet<string> uniqueIds = new(StringComparer.Ordinal);
+
+        foreach (AvailableModel model in cachedModels
+                     .Where(static model => !string.IsNullOrWhiteSpace(model.Id))
+                     .OrderBy(static model => model.Id, StringComparer.Ordinal))
+        {
+            string normalizedId = model.Id.Trim();
+            if (!uniqueIds.Add(normalizedId))
+            {
+                hadDuplicates = true;
+                continue;
+            }
+
+            normalizedModels.Add(new AvailableModel(normalizedId));
+        }
+
+        if (normalizedModels.Count == 0)
+        {
+            throw new ModelDiscoveryException(
+                "The configured provider returned no usable models.");
+        }
+
+        return (normalizedModels, hadDuplicates);
+    }
+
+    private static string BuildCacheKey(AgentProviderProfile providerProfile, string apiKey)
+    {
+        string rawKey = $"{providerProfile.ProviderKind}|{providerProfile.BaseUrl ?? "https://api.openai.com/v1"}|{apiKey}";
+        byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawKey));
+        return Convert.ToHexString(hashBytes);
+    }
+}

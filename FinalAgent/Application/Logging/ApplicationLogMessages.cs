@@ -33,4 +33,28 @@ internal static partial class ApplicationLogMessages
         Level = LogLevel.Information,
         Message = "Application runner completed successfully. Provider: '{providerName}'. Onboarded during this run: {wasOnboarded}.")]
     public static partial void RunnerCompleted(ILogger logger, string providerName, bool wasOnboarded);
+
+    [LoggerMessage(
+        EventId = 1005,
+        Level = LogLevel.Information,
+        Message = "Starting model discovery for provider '{providerName}'.")]
+    public static partial void ModelDiscoveryStarted(ILogger logger, string providerName);
+
+    [LoggerMessage(
+        EventId = 1006,
+        Level = LogLevel.Information,
+        Message = "Model discovery selected '{modelId}' using '{selectionSource}'.")]
+    public static partial void ModelDiscoveryCompleted(ILogger logger, string modelId, string selectionSource);
+
+    [LoggerMessage(
+        EventId = 1007,
+        Level = LogLevel.Warning,
+        Message = "Configured default model '{configuredModel}' was not returned by the provider. Falling back to the ranked preference list.")]
+    public static partial void ConfiguredDefaultModelNotFound(ILogger logger, string configuredModel);
+
+    [LoggerMessage(
+        EventId = 1008,
+        Level = LogLevel.Warning,
+        Message = "The provider returned duplicate model identifiers. Using the de-duplicated sorted set for selection.")]
+    public static partial void DuplicateModelsDetected(ILogger logger);
 }
