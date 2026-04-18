@@ -9,14 +9,12 @@ public sealed class ApplicationOptionsValidatorTests
     private readonly ApplicationOptionsValidator _sut = new();
 
     [Fact]
-    public void Validate_Should_ReturnSuccess_When_OptionsAreWithinSupportedRange()
+    public void Validate_Should_ReturnSuccess_When_ProductAndStorageDirectoryAreProvided()
     {
         ApplicationOptions options = new()
         {
-            OperatorName = "FinalAgent",
-            TargetName = "Native AOT host",
-            RepeatCount = 3,
-            DelayMilliseconds = 500
+            ProductName = "FinalAgent",
+            StorageDirectoryName = "FinalAgent"
         };
 
         ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
@@ -29,35 +27,31 @@ public sealed class ApplicationOptionsValidatorTests
     {
         ApplicationOptions options = new()
         {
-            OperatorName = "   ",
-            TargetName = string.Empty,
-            RepeatCount = 1,
-            DelayMilliseconds = 0
+            ProductName = "",
+            StorageDirectoryName = " "
         };
 
         ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
 
         result.Failed.Should().BeTrue();
-        result.Failures.Should().Contain(failure => failure.Contains("OperatorName"));
-        result.Failures.Should().Contain(failure => failure.Contains("TargetName"));
+        result.Failures.Should().Contain(failure => failure.Contains("ProductName"));
+        result.Failures.Should().Contain(failure => failure.Contains("StorageDirectoryName"));
     }
 
     [Fact]
-    public void Validate_Should_ReturnFailure_When_NumericValuesAreOutOfRange()
+    public void Validate_Should_ReturnFailure_When_StorageDirectoryContainsInvalidPathCharacters()
     {
+        char invalidCharacter = Path.GetInvalidFileNameChars().First(character => character != '\0');
         ApplicationOptions options = new()
         {
-            OperatorName = "FinalAgent",
-            TargetName = "Native AOT host",
-            RepeatCount = 0,
-            DelayMilliseconds = 60001
+            ProductName = "FinalAgent",
+            StorageDirectoryName = $"Final{invalidCharacter}Agent"
         };
 
         ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
 
         result.Failed.Should().BeTrue();
-        result.Failures.Should().Contain(failure => failure.Contains("RepeatCount"));
-        result.Failures.Should().Contain(failure => failure.Contains("DelayMilliseconds"));
+        result.Failures.Should().Contain(failure => failure.Contains("invalid path characters"));
     }
 
     [Fact]

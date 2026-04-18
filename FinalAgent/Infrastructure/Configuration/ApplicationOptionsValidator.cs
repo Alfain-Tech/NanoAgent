@@ -10,28 +10,33 @@ public sealed class ApplicationOptionsValidator : IValidateOptions<ApplicationOp
 
         List<string> failures = [];
 
-        if (string.IsNullOrWhiteSpace(options.OperatorName))
+        if (string.IsNullOrWhiteSpace(options.ProductName))
         {
-            failures.Add($"{ApplicationOptions.SectionName}:OperatorName must be provided.");
+            failures.Add($"{ApplicationOptions.SectionName}:ProductName must be provided.");
         }
 
-        if (string.IsNullOrWhiteSpace(options.TargetName))
+        if (string.IsNullOrWhiteSpace(options.StorageDirectoryName))
         {
-            failures.Add($"{ApplicationOptions.SectionName}:TargetName must be provided.");
+            failures.Add($"{ApplicationOptions.SectionName}:StorageDirectoryName must be provided.");
         }
 
-        if (options.RepeatCount is < 1 or > 100)
+        if (ContainsInvalidPathCharacters(options.StorageDirectoryName))
         {
-            failures.Add($"{ApplicationOptions.SectionName}:RepeatCount must be between 1 and 100.");
-        }
-
-        if (options.DelayMilliseconds is < 0 or > 60000)
-        {
-            failures.Add($"{ApplicationOptions.SectionName}:DelayMilliseconds must be between 0 and 60000.");
+            failures.Add($"{ApplicationOptions.SectionName}:StorageDirectoryName contains invalid path characters.");
         }
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures);
+    }
+
+    private static bool ContainsInvalidPathCharacters(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0;
     }
 }

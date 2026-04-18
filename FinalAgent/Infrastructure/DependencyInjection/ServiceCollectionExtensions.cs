@@ -1,6 +1,6 @@
-using FinalAgent.Domain.Abstractions;
 using FinalAgent.Infrastructure.Configuration;
-using FinalAgent.Infrastructure.Time;
+using FinalAgent.Application.Abstractions;
+using FinalAgent.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -16,7 +16,9 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        services.AddSingleton<ISystemClock, SystemClock>();
+        services.AddSingleton<IUserDataPathProvider, UserDataPathProvider>();
+        services.AddSingleton<IAgentConfigurationStore, JsonAgentConfigurationStore>();
+        services.AddSingleton<IApiKeySecretStore, JsonApiKeySecretStore>();
         services.AddSingleton<IValidateOptions<ApplicationOptions>, ApplicationOptionsValidator>();
 
         services

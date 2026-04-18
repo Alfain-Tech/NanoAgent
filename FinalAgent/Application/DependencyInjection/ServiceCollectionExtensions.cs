@@ -12,8 +12,10 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddScoped<IApplicationRunner, GreetingApplicationRunner>();
-        services.AddSingleton<IGreetingComposer, GreetingComposer>();
+        services.AddScoped<IApplicationRunner, AgentApplicationRunner>();
+        services.AddSingleton<IFirstRunOnboardingService, FirstRunOnboardingService>();
+        services.AddSingleton<IOnboardingInputValidator, OnboardingInputValidator>();
+        services.AddSingleton<IAgentProviderProfileFactory, AgentProviderProfileFactory>();
 
         return services;
     }
