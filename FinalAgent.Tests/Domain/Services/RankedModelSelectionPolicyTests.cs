@@ -61,6 +61,40 @@ public sealed class RankedModelSelectionPolicyTests
     }
 
     [Fact]
+    public void Select_Should_UseConfiguredDefault_When_ModelIdMatchesTerminalSegmentOfAvailableModel()
+    {
+        ModelSelectionContext context = new(
+            [new AvailableModel("openai/gpt-oss-20b"), new AvailableModel("qwen/qwen3-coder-30b")],
+            "gpt-oss-20b",
+            ["qwen3-coder-30b"]);
+
+        ModelSelectionDecision result = _sut.Select(context);
+
+        result.Should().Be(new ModelSelectionDecision(
+            "openai/gpt-oss-20b",
+            ModelSelectionSource.ConfiguredDefault,
+            ConfiguredDefaultModelStatus.Matched,
+            "gpt-oss-20b"));
+    }
+
+    [Fact]
+    public void Select_Should_UseRankedPreference_When_RankedModelMatchesTerminalSegmentOfAvailableModel()
+    {
+        ModelSelectionContext context = new(
+            [new AvailableModel("openai/gpt-oss-20b"), new AvailableModel("qwen/qwen3-coder-30b")],
+            "gpt-5-mini",
+            ["gpt-oss-20b", "qwen3-coder-30b"]);
+
+        ModelSelectionDecision result = _sut.Select(context);
+
+        result.Should().Be(new ModelSelectionDecision(
+            "openai/gpt-oss-20b",
+            ModelSelectionSource.RankedPreference,
+            ConfiguredDefaultModelStatus.NotFound,
+            "gpt-5-mini"));
+    }
+
+    [Fact]
     public void Select_Should_ThrowModelSelectionException_When_NoRankedPreferenceMatches()
     {
         ModelSelectionContext context = new(

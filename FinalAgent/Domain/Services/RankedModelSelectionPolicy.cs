@@ -17,14 +17,14 @@ internal sealed class RankedModelSelectionPolicy : IModelSelectionPolicy
         }
 
         string? configuredDefaultModel = Normalize(context.ConfiguredDefaultModel);
-        HashSet<string> availableModels = context.AvailableModels
-            .Select(model => model.Id)
-            .ToHashSet(StringComparer.Ordinal);
+        string? matchedConfiguredDefaultModel = ResolvePreferredModelId(
+            context.AvailableModels,
+            configuredDefaultModel);
 
-        if (configuredDefaultModel is not null && availableModels.Contains(configuredDefaultModel))
+        if (matchedConfiguredDefaultModel is not null)
         {
             return new ModelSelectionDecision(
-                configuredDefaultModel,
+                matchedConfiguredDefaultModel,
                 ModelSelectionSource.ConfiguredDefault,
                 ConfiguredDefaultModelStatus.Matched,
                 configuredDefaultModel);
@@ -32,11 +32,14 @@ internal sealed class RankedModelSelectionPolicy : IModelSelectionPolicy
 
         foreach (string rankedPreference in context.RankedPreferenceList)
         {
-            string? normalizedPreference = Normalize(rankedPreference);
-            if (normalizedPreference is not null && availableModels.Contains(normalizedPreference))
+            string? matchedRankedModel = ResolvePreferredModelId(
+                context.AvailableModels,
+                rankedPreference);
+
+            if (matchedRankedModel is not null)
             {
                 return new ModelSelectionDecision(
-                    normalizedPreference,
+                    matchedRankedModel,
                     ModelSelectionSource.RankedPreference,
                     configuredDefaultModel is null
                         ? ConfiguredDefaultModelStatus.NotConfigured
@@ -51,6 +54,46 @@ internal sealed class RankedModelSelectionPolicy : IModelSelectionPolicy
 
         throw new ModelSelectionException(
             $"{configuredModelMessage} None of the ranked preference models are available.");
+    }
+
+    private static string? ResolvePreferredModelId(
+        IReadOnlyList<AvailableModel> availableModels,
+        string? preferredModelId)
+    {
+        string? normalizedPreferredModelId = Normalize(preferredModelId);
+        if (normalizedPreferredModelId is null)
+        {
+            return null;
+        }
+
+        foreach (AvailableModel availableModel in availableModels)
+        {
+            if (string.Equals(availableModel.Id, normalizedPreferredModelId, StringComparison.Ordinal))
+            {
+                return availableModel.Id;
+            }
+        }
+
+        foreach (AvailableModel availableModel in availableModels)
+        {
+            if (HasMatchingTerminalSegment(availableModel.Id, normalizedPreferredModelId))
+            {
+                return availableModel.Id;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasMatchingTerminalSegment(string modelId, string preferredModelId)
+    {
+        int lastSlashIndex = modelId.LastIndexOf('/');
+        if (lastSlashIndex < 0 || lastSlashIndex == modelId.Length - 1)
+        {
+            return false;
+        }
+
+        return modelId[(lastSlashIndex + 1)..].Equals(preferredModelId, StringComparison.Ordinal);
     }
 
     private static string? Normalize(string? value)

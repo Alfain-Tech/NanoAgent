@@ -3,6 +3,7 @@ using System.Text.Json;
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Exceptions;
 using FinalAgent.Domain.Models;
+using FinalAgent.Domain.Services;
 
 namespace FinalAgent.Infrastructure.Models;
 
@@ -70,9 +71,13 @@ internal sealed class OpenAiCompatibleModelProviderClient : IModelProviderClient
                 ?? throw new ModelProviderException(
                     "The configured OpenAI-compatible provider is missing a base URL.");
 
-        return new Uri(baseUrl.EndsWith("/", StringComparison.Ordinal)
+        string normalizedBaseUrl = providerProfile.ProviderKind == ProviderKind.OpenAi
             ? baseUrl
-            : $"{baseUrl}/");
+            : CompatibleProviderBaseUrlNormalizer.Normalize(baseUrl);
+
+        return new Uri(normalizedBaseUrl.EndsWith("/", StringComparison.Ordinal)
+            ? normalizedBaseUrl
+            : $"{normalizedBaseUrl}/");
     }
 
     private static string Truncate(string value, int maxLength)

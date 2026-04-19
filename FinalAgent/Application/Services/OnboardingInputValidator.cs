@@ -1,5 +1,6 @@
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Models;
+using FinalAgent.Domain.Services;
 
 namespace FinalAgent.Application.Services;
 
@@ -39,7 +40,7 @@ internal sealed class OnboardingInputValidator : IOnboardingInputValidator
             return InputValidationResult.Failure("Base URL cannot contain a query string or fragment.");
         }
 
-        string canonicalValue = uri.ToString().TrimEnd('/');
+        string canonicalValue = CompatibleProviderBaseUrlNormalizer.Normalize(uri);
         return InputValidationResult.Success(canonicalValue);
     }
 }

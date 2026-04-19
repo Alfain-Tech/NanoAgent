@@ -34,6 +34,14 @@ public sealed class OnboardingInputValidatorTests
     }
 
     [Fact]
+    public void ValidateBaseUrl_Should_AppendV1_When_RootCompatibleBaseUrlIsProvided()
+    {
+        InputValidationResult result = _sut.ValidateBaseUrl(" http://127.0.0.1:1234/ ");
+
+        result.Should().Be(InputValidationResult.Success("http://127.0.0.1:1234/v1"));
+    }
+
+    [Fact]
     public void ValidateBaseUrl_Should_ReturnFailure_When_UrlContainsQueryString()
     {
         InputValidationResult result = _sut.ValidateBaseUrl("https://provider.example.com/v1?model=gpt");

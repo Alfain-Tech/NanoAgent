@@ -25,6 +25,14 @@ public sealed class AgentProviderProfileFactoryTests
     }
 
     [Fact]
+    public void CreateCompatible_Should_AppendV1_When_RootBaseUrlIsProvided()
+    {
+        AgentProviderProfile profile = _sut.CreateCompatible(" http://127.0.0.1:1234 ");
+
+        profile.Should().Be(new AgentProviderProfile(ProviderKind.OpenAiCompatible, "http://127.0.0.1:1234/v1"));
+    }
+
+    [Fact]
     public void CreateCompatible_Should_ThrowArgumentException_When_BaseUrlIsWhitespace()
     {
         Action act = () => _sut.CreateCompatible("  ");

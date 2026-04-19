@@ -14,7 +14,7 @@ internal sealed class AgentProviderProfileFactory : IAgentProviderProfileFactory
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
 
-        string normalizedBaseUrl = baseUrl.Trim().TrimEnd('/');
+        string normalizedBaseUrl = CompatibleProviderBaseUrlNormalizer.Normalize(baseUrl);
         return new AgentProviderProfile(ProviderKind.OpenAiCompatible, normalizedBaseUrl);
     }
 }
