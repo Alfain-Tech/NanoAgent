@@ -18,7 +18,7 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
-  SOLUTION_FILE: FinalAgent.slnx
+  SOLUTION_FILE: NanoAgent.slnx
 
 jobs:
   build-and-test:
@@ -35,8 +35,8 @@ jobs:
           global-json-file: global.json
           cache: true
           cache-dependency-path: |
-            FinalAgent/packages.lock.json
-            FinalAgent.Tests/packages.lock.json
+            NanoAgent/packages.lock.json
+            NanoAgent.Tests/packages.lock.json
 
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION_FILE }} --locked-mode

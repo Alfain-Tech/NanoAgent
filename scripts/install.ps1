@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$Tag = $env:FINALAGENT_TAG,
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\FinalAgent\bin')
+    [string]$Tag = $env:NanoAgent_TAG,
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\NanoAgent\bin')
 )
 
 Set-StrictMode -Version Latest
@@ -9,8 +9,8 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $Owner = 'rizwan3d'
-$Repo = 'FinalAgent'
-$AppName = 'FinalAgent'
+$Repo = 'NanoAgent'
+$AppName = 'NanoAgent'
 $AssetName = "$AppName-win-x64.zip"
 
 function Write-Status {
@@ -32,7 +32,7 @@ function Get-LatestTag {
         $response = Invoke-RestMethod -Uri $apiUrl -Headers @{ 'User-Agent' = "$AppName-installer" }
     }
     catch {
-        Fail-Install "Unable to resolve the latest release tag from $apiUrl. Set FINALAGENT_TAG and try again. $($_.Exception.Message)"
+        Fail-Install "Unable to resolve the latest release tag from $apiUrl. Set NanoAgent_TAG and try again. $($_.Exception.Message)"
     }
 
     if ([string]::IsNullOrWhiteSpace($response.tag_name)) {

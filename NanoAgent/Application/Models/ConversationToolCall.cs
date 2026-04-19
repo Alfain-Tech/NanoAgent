@@ -1,0 +1,6 @@
+namespace NanoAgent.Application.Models;
+
+public sealed record ConversationToolCall(
+    string Id,
+    string Name,
+    string ArgumentsJson);

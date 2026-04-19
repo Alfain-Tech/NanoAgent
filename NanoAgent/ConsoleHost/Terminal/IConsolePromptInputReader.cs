@@ -1,0 +1,10 @@
+namespace NanoAgent.ConsoleHost.Terminal;
+
+internal interface IConsolePromptInputReader
+{
+    Task<string> ReadLineAsync(
+        string? defaultValue,
+        ConsoleInputEchoMode echoMode,
+        bool allowCancellation,
+        CancellationToken cancellationToken);
+}

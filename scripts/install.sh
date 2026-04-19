@@ -2,8 +2,8 @@
 set -euo pipefail
 
 readonly OWNER="rizwan3d"
-readonly REPO="FinalAgent"
-readonly APP_NAME="FinalAgent"
+readonly REPO="NanoAgent"
+readonly APP_NAME="NanoAgent"
 readonly DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
 
 log() {
@@ -52,7 +52,7 @@ resolve_latest_tag() {
   rm -f "$metadata"
 
   if [[ -z "$tag" ]]; then
-    fail "Unable to determine the latest release tag from GitHub. Set FINALAGENT_TAG and try again."
+    fail "Unable to determine the latest release tag from GitHub. Set NanoAgent_TAG and try again."
   fi
 
   printf '%s\n' "$tag"
@@ -102,8 +102,8 @@ main() {
   require_command unzip
   require_command mktemp
 
-  local install_dir="${FINALAGENT_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
-  local requested_tag="${FINALAGENT_TAG:-${1:-}}"
+  local install_dir="${NanoAgent_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+  local requested_tag="${NanoAgent_TAG:-${1:-}}"
   local tag="${requested_tag}"
   local platform
   local asset_name

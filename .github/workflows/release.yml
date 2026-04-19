@@ -24,15 +24,15 @@ permissions:
   contents: write
 
 env:
-  APP_NAME: FinalAgent
-  APP_PROJECT: FinalAgent/FinalAgent.csproj
+  APP_NAME: NanoAgent
+  APP_PROJECT: NanoAgent/NanoAgent.csproj
   CONFIGURATION: Release
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-  SOLUTION_FILE: FinalAgent.slnx
+  SOLUTION_FILE: NanoAgent.slnx
 
 jobs:
   validate:
@@ -51,8 +51,8 @@ jobs:
           global-json-file: global.json
           cache: true
           cache-dependency-path: |
-            FinalAgent/packages.lock.json
-            FinalAgent.Tests/packages.lock.json
+            NanoAgent/packages.lock.json
+            NanoAgent.Tests/packages.lock.json
 
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION_FILE }} --locked-mode
@@ -113,8 +113,8 @@ jobs:
           global-json-file: global.json
           cache: true
           cache-dependency-path: |
-            FinalAgent/packages.lock.json
-            FinalAgent.Tests/packages.lock.json
+            NanoAgent/packages.lock.json
+            NanoAgent.Tests/packages.lock.json
 
       - name: Install Linux Native AOT prerequisites
         if: runner.os == 'Linux'
@@ -195,7 +195,7 @@ jobs:
           package_lines="$(find "$GITHUB_WORKSPACE/artifacts/release" -type f -name '*.zip' -printf -- '- %f\n' | sort)"
 
           {
-            echo "# FinalAgent $RELEASE_TAG"
+            echo "# NanoAgent $RELEASE_TAG"
             echo
             echo "## Packages"
             echo
@@ -214,7 +214,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="$RELEASE_TAG"
-          title="FinalAgent $tag"
+          title="NanoAgent $tag"
           target_sha="$(git rev-parse HEAD)"
           mapfile -t assets < <(find "$GITHUB_WORKSPACE/artifacts/release" -type f -name '*.zip' | sort)
 

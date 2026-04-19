@@ -1,0 +1,7 @@
+namespace NanoAgent.Domain.Models;
+
+public enum ProviderKind
+{
+    OpenAi = 1,
+    OpenAiCompatible = 2
+}

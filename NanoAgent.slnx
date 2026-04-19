@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="NanoAgent/NanoAgent.csproj" />
+  <Project Path="NanoAgent.Tests/NanoAgent.Tests.csproj" />
+</Solution>
