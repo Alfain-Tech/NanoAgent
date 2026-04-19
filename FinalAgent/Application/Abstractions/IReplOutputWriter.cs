@@ -6,5 +6,7 @@ public interface IReplOutputWriter
 
     Task WriteErrorAsync(string message, CancellationToken cancellationToken);
 
+    Task WriteWarningAsync(string message, CancellationToken cancellationToken);
+
     Task WriteResponseAsync(string message, CancellationToken cancellationToken);
 }

@@ -327,6 +327,8 @@ public sealed class ReplRuntimeTests
 
         public List<string> Responses { get; } = [];
 
+        public List<string> WarningMessages { get; } = [];
+
         public Task WriteErrorAsync(string message, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -338,6 +340,13 @@ public sealed class ReplRuntimeTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             InfoMessages.Add(message);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteWarningAsync(string message, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            WarningMessages.Add(message);
             return Task.CompletedTask;
         }
 

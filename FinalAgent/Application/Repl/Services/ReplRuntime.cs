@@ -137,7 +137,9 @@ internal sealed class ReplRuntime : IReplRuntime
 
         return commandResult.FeedbackKind == ReplFeedbackKind.Error
             ? _outputWriter.WriteErrorAsync(commandResult.Message, cancellationToken)
-            : _outputWriter.WriteInfoAsync(commandResult.Message, cancellationToken);
+            : commandResult.FeedbackKind == ReplFeedbackKind.Warning
+                ? _outputWriter.WriteWarningAsync(commandResult.Message, cancellationToken)
+                : _outputWriter.WriteInfoAsync(commandResult.Message, cancellationToken);
     }
 
     private static string NormalizeInput(string rawInput)

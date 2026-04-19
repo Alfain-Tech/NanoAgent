@@ -1,56 +1,50 @@
 using FinalAgent.Application.Abstractions;
-using FinalAgent.ConsoleHost.Terminal;
+using FinalAgent.ConsoleHost.Rendering;
 
 namespace FinalAgent.ConsoleHost.Repl;
 
 internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
 {
-    private readonly IConsolePromptRenderer _renderer;
-    private readonly IConsoleTerminal _terminal;
+    private readonly ICliMessageFormatter _formatter;
+    private readonly ICliTextRenderer _renderer;
 
     public ConsoleReplOutputWriter(
-        IConsolePromptRenderer renderer,
-        IConsoleTerminal terminal)
+        ICliMessageFormatter formatter,
+        ICliTextRenderer renderer)
     {
+        _formatter = formatter;
         _renderer = renderer;
-        _terminal = terminal;
     }
 
     public Task WriteErrorAsync(string message, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _renderer.WriteStatus(StatusMessageKind.Error, message);
-        return Task.CompletedTask;
+        return _renderer.RenderAsync(
+            _formatter.Format(CliRenderMessageKind.Error, message),
+            cancellationToken);
     }
 
     public Task WriteInfoAsync(string message, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _renderer.WriteStatus(StatusMessageKind.Info, message);
-        return Task.CompletedTask;
+        return _renderer.RenderAsync(
+            _formatter.Format(CliRenderMessageKind.Info, message),
+            cancellationToken);
+    }
+
+    public Task WriteWarningAsync(string message, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return _renderer.RenderAsync(
+            _formatter.Format(CliRenderMessageKind.Warning, message),
+            cancellationToken);
     }
 
     public Task WriteResponseAsync(string message, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
-        foreach (string line in NormalizeLines(message))
-        {
-            _terminal.WriteLine($"assistant> {line}");
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private static IReadOnlyList<string> NormalizeLines(string message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            return [" "];
-        }
-
-        return message
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n');
+        return _renderer.RenderAsync(
+            _formatter.Format(CliRenderMessageKind.Assistant, message),
+            cancellationToken);
     }
 }

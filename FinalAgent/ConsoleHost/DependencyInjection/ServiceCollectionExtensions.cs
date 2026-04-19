@@ -2,6 +2,7 @@ using FinalAgent.Application.Abstractions;
 using FinalAgent.ConsoleHost.Hosting;
 using FinalAgent.ConsoleHost.Prompts;
 using FinalAgent.ConsoleHost.Repl;
+using FinalAgent.ConsoleHost.Rendering;
 using FinalAgent.ConsoleHost.Terminal;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +17,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IConsoleTerminal, ConsoleTerminal>();
         services.AddSingleton<IConsolePromptRenderer, ConsolePromptRenderer>();
         services.AddSingleton<IConsolePromptInputReader, ConsolePromptInputReader>();
+        services.AddSingleton<ICliOutputTarget, ConsoleCliOutputTarget>();
+        services.AddSingleton<ICliMessageFormatter, MarkdownLikeCliMessageFormatter>();
+        services.AddSingleton<ICliTextRenderer, CliTextRenderer>();
         services.AddSingleton<ISelectionPrompt, ConsoleSelectionPrompt>();
         services.AddSingleton<ITextPrompt, ConsoleTextPrompt>();
         services.AddSingleton<ISecretPrompt, ConsoleSecretPrompt>();
