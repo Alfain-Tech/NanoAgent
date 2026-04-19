@@ -8,6 +8,8 @@ public sealed class ApplicationOptions
 
     public string StorageDirectoryName { get; set; } = string.Empty;
 
+    public ConversationOptions Conversation { get; set; } = new();
+
     public ApplicationDefaultsOptions Defaults { get; set; } = new();
 
     public ModelSelectionOptions ModelSelection { get; set; } = new();

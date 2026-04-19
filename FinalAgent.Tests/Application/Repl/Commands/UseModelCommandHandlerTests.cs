@@ -1,5 +1,6 @@
 using FinalAgent.Application.Models;
 using FinalAgent.Application.Repl.Commands;
+using FinalAgent.Application.Services;
 using FinalAgent.Domain.Models;
 using FluentAssertions;
 
@@ -10,7 +11,7 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_ReturnUsageError_When_ModelArgumentIsMissing()
     {
-        UseModelCommandHandler sut = new();
+        UseModelCommandHandler sut = new(new ModelActivationService());
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAi, null),
             "gpt-5-mini",
@@ -27,7 +28,7 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_SwitchActiveModel_When_ExactModelIdMatches()
     {
-        UseModelCommandHandler sut = new();
+        UseModelCommandHandler sut = new(new ModelActivationService());
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
             "qwen/qwen3-coder-30b",
@@ -44,7 +45,7 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_SwitchActiveModel_When_UniqueTerminalSegmentMatches()
     {
-        UseModelCommandHandler sut = new();
+        UseModelCommandHandler sut = new(new ModelActivationService());
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
             "qwen/qwen3-coder-30b",
@@ -61,7 +62,7 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_ReturnError_When_ModelDoesNotExist()
     {
-        UseModelCommandHandler sut = new();
+        UseModelCommandHandler sut = new(new ModelActivationService());
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
             "qwen/qwen3-coder-30b",

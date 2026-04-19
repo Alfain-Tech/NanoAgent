@@ -102,4 +102,29 @@ public sealed class ApplicationOptionsValidatorTests
         result.Failures.Should().Contain(failure => failure.Contains("CacheDurationSeconds"));
         result.Failures.Should().Contain(failure => failure.Contains("RankedPreferenceList"));
     }
+
+    [Fact]
+    public void Validate_Should_ReturnFailure_When_ConversationTimeoutIsNotPositive()
+    {
+        ApplicationOptions options = new()
+        {
+            ProductName = "FinalAgent",
+            StorageDirectoryName = "FinalAgent",
+            Conversation = new ConversationOptions
+            {
+                RequestTimeoutSeconds = 0
+            },
+            Defaults = new ApplicationDefaultsOptions(),
+            ModelSelection = new ModelSelectionOptions
+            {
+                CacheDurationSeconds = 300,
+                RankedPreferenceList = ["gpt-5-mini"]
+            }
+        };
+
+        ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(failure => failure.Contains("RequestTimeoutSeconds"));
+    }
 }

@@ -25,6 +25,15 @@ public sealed class ApplicationOptionsValidator : IValidateOptions<ApplicationOp
             failures.Add($"{ApplicationOptions.SectionName}:StorageDirectoryName contains invalid path characters.");
         }
 
+        if (options.Conversation is null)
+        {
+            failures.Add($"{ApplicationOptions.SectionName}:Conversation must be provided.");
+        }
+        else if (options.Conversation.RequestTimeoutSeconds <= 0)
+        {
+            failures.Add($"{ApplicationOptions.SectionName}:Conversation:RequestTimeoutSeconds must be greater than zero.");
+        }
+
         if (options.ModelSelection is null)
         {
             failures.Add($"{ApplicationOptions.SectionName}:ModelSelection must be provided.");

@@ -87,4 +87,28 @@ internal static partial class ApplicationLogMessages
         Level = LogLevel.Information,
         Message = "Interactive shell input stream closed. Exiting the shell.")]
     public static partial void ReplInputClosed(ILogger logger);
+
+    [LoggerMessage(
+        EventId = 1014,
+        Level = LogLevel.Information,
+        Message = "Sending conversation request to provider '{providerName}' using model '{modelId}'.")]
+    public static partial void ConversationRequestStarted(ILogger logger, string providerName, string modelId);
+
+    [LoggerMessage(
+        EventId = 1015,
+        Level = LogLevel.Information,
+        Message = "Normalized provider response into an assistant message.")]
+    public static partial void ConversationAssistantMessageReceived(ILogger logger);
+
+    [LoggerMessage(
+        EventId = 1016,
+        Level = LogLevel.Information,
+        Message = "Provider response contains {toolCallCount} tool call(s). Handing off to the tool execution pipeline.")]
+    public static partial void ConversationToolHandoffStarted(ILogger logger, int toolCallCount);
+
+    [LoggerMessage(
+        EventId = 1017,
+        Level = LogLevel.Information,
+        Message = "Tool execution pipeline completed for the current conversation turn.")]
+    public static partial void ConversationToolHandoffCompleted(ILogger logger);
 }

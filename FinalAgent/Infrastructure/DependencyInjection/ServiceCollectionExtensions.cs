@@ -1,4 +1,5 @@
 using FinalAgent.Infrastructure.Configuration;
+using FinalAgent.Infrastructure.Conversation;
 using FinalAgent.Infrastructure.Secrets;
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Infrastructure.Models;
@@ -22,10 +23,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentConfigurationStore, JsonAgentConfigurationStore>();
         services.AddSingleton<IApiKeySecretStore, ApiKeySecretStore>();
         services.AddSingleton<IModelCache, InMemoryModelCache>();
+        services.AddSingleton<IConversationConfigurationAccessor, ConversationConfigurationAccessor>();
+        services.AddSingleton<IConversationResponseMapper, OpenAiConversationResponseMapper>();
         services.AddSingleton<IModelSelectionConfigurationAccessor, ModelSelectionConfigurationAccessor>();
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton<IPlatformCredentialStore>(CreatePlatformCredentialStore());
         services.AddSingleton<IValidateOptions<ApplicationOptions>, ApplicationOptionsValidator>();
+        services.AddHttpClient<IConversationProviderClient, OpenAiCompatibleConversationProviderClient>();
         services.AddHttpClient<IModelProviderClient, OpenAiCompatibleModelProviderClient>();
 
         services

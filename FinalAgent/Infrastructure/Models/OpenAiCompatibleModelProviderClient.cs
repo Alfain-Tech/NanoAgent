@@ -3,14 +3,12 @@ using System.Text.Json;
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Exceptions;
 using FinalAgent.Domain.Models;
-using FinalAgent.Domain.Services;
+using FinalAgent.Infrastructure.OpenAi;
 
 namespace FinalAgent.Infrastructure.Models;
 
 internal sealed class OpenAiCompatibleModelProviderClient : IModelProviderClient
 {
-    private const string OpenAiBaseUrl = "https://api.openai.com/v1/";
-
     private readonly HttpClient _httpClient;
 
     public OpenAiCompatibleModelProviderClient(HttpClient httpClient)
@@ -26,7 +24,7 @@ internal sealed class OpenAiCompatibleModelProviderClient : IModelProviderClient
         ArgumentNullException.ThrowIfNull(providerProfile);
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
 
-        Uri baseUri = ResolveBaseUri(providerProfile);
+        Uri baseUri = OpenAiBaseUriResolver.Resolve(providerProfile);
         using HttpRequestMessage request = new(HttpMethod.Get, new Uri(baseUri, "models"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
@@ -62,24 +60,6 @@ internal sealed class OpenAiCompatibleModelProviderClient : IModelProviderClient
             .Select(item => new AvailableModel(item.Id))
             .ToArray();
     }
-
-    private static Uri ResolveBaseUri(AgentProviderProfile providerProfile)
-    {
-        string baseUrl = providerProfile.ProviderKind == ProviderKind.OpenAi
-            ? OpenAiBaseUrl
-            : providerProfile.BaseUrl
-                ?? throw new ModelProviderException(
-                    "The configured OpenAI-compatible provider is missing a base URL.");
-
-        string normalizedBaseUrl = providerProfile.ProviderKind == ProviderKind.OpenAi
-            ? baseUrl
-            : CompatibleProviderBaseUrlNormalizer.Normalize(baseUrl);
-
-        return new Uri(normalizedBaseUrl.EndsWith("/", StringComparison.Ordinal)
-            ? normalizedBaseUrl
-            : $"{normalizedBaseUrl}/");
-    }
-
     private static string Truncate(string value, int maxLength)
     {
         return value.Length <= maxLength
