@@ -12,6 +12,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
     private readonly IConversationProviderClient _providerClient;
     private readonly IConversationResponseMapper _responseMapper;
     private readonly IToolExecutionPipeline _toolExecutionPipeline;
+    private readonly IToolRegistry _toolRegistry;
     private readonly IConversationConfigurationAccessor _configurationAccessor;
     private readonly ILogger<AgentConversationPipeline> _logger;
 
@@ -20,6 +21,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         IConversationProviderClient providerClient,
         IConversationResponseMapper responseMapper,
         IToolExecutionPipeline toolExecutionPipeline,
+        IToolRegistry toolRegistry,
         IConversationConfigurationAccessor configurationAccessor,
         ILogger<AgentConversationPipeline> logger)
     {
@@ -27,6 +29,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         _providerClient = providerClient;
         _responseMapper = responseMapper;
         _toolExecutionPipeline = toolExecutionPipeline;
+        _toolRegistry = toolRegistry;
         _configurationAccessor = configurationAccessor;
         _logger = logger;
     }
@@ -63,7 +66,8 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                     apiKey,
                     session.ActiveModelId,
                     input.Trim(),
-                    settings.SystemPrompt),
+                    settings.SystemPrompt,
+                    _toolRegistry.GetToolDefinitions()),
                 timeoutSource.Token);
         }
         catch (ConversationProviderException)

@@ -79,9 +79,19 @@ internal sealed class OpenAiCompatibleConversationProviderClient : IConversation
             "user",
             request.UserInput.Trim()));
 
+        OpenAiChatCompletionToolDefinition[] tools = request.AvailableTools
+            .Select(definition => new OpenAiChatCompletionToolDefinition(
+                "function",
+                new OpenAiChatCompletionFunctionDefinition(
+                    definition.Name,
+                    definition.Description,
+                    definition.Schema)))
+            .ToArray();
+
         return new OpenAiChatCompletionRequest(
             request.ModelId,
-            messages);
+            messages,
+            tools);
     }
 
     private static string? TryGetResponseId(HttpResponseMessage response)

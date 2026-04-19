@@ -1,6 +1,7 @@
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Models;
 using FinalAgent.Application.Tools.Services;
+using FinalAgent.Application.Tools.Serialization;
 using FinalAgent.Domain.Models;
 using FluentAssertions;
 
@@ -25,6 +26,23 @@ public sealed class RegistryBackedToolInvokerTests
 
         result.Result.Status.Should().Be(ToolResultStatus.NotFound);
         result.Result.Message.Should().Contain("not registered");
+        result.Result.JsonResult.Should().Contain("tool_not_found");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_Should_ReturnInvalidArguments_When_ToolArgumentsAreNotJsonObject()
+    {
+        RegistryBackedToolInvoker sut = new(new ToolRegistry([
+            new EchoTool()
+        ]));
+
+        ToolInvocationResult result = await sut.InvokeAsync(
+            new ConversationToolCall("call_1", "echo_tool", "[]"),
+            Session,
+            CancellationToken.None);
+
+        result.Result.Status.Should().Be(ToolResultStatus.InvalidArguments);
+        result.Result.Message.Should().Contain("JSON-object arguments");
     }
 
     [Fact]
@@ -43,9 +61,68 @@ public sealed class RegistryBackedToolInvokerTests
         result.Result.Message.Should().Contain("boom");
     }
 
-    private sealed class ThrowingTool : IAgentTool
+    [Fact]
+    public async Task InvokeAsync_Should_ReturnExecutionError_When_ToolTimesOut()
     {
+        RegistryBackedToolInvoker sut = new(
+            new ToolRegistry([new SlowTool()]),
+            TimeSpan.FromMilliseconds(50));
+
+        ToolInvocationResult result = await sut.InvokeAsync(
+            new ConversationToolCall("call_1", "slow_tool", "{}"),
+            Session,
+            CancellationToken.None);
+
+        result.Result.Status.Should().Be(ToolResultStatus.ExecutionError);
+        result.Result.Message.Should().Contain("timed out");
+    }
+
+    private sealed class EchoTool : ITool
+    {
+        public string Description => "Echo tool";
+
+        public string Name => "echo_tool";
+
+        public string Schema => """{ "type": "object", "properties": {}, "additionalProperties": false }""";
+
+        public Task<ToolResult> ExecuteAsync(
+            ToolExecutionContext context,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(ToolResultFactory.Success(
+                "Echoed.",
+                new ToolErrorPayload("echo", "ok"),
+                ToolJsonContext.Default.ToolErrorPayload));
+        }
+    }
+
+    private sealed class SlowTool : ITool
+    {
+        public string Description => "Slow tool";
+
+        public string Name => "slow_tool";
+
+        public string Schema => """{ "type": "object", "properties": {}, "additionalProperties": false }""";
+
+        public async Task<ToolResult> ExecuteAsync(
+            ToolExecutionContext context,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+            return ToolResultFactory.Success(
+                "Completed.",
+                new ToolErrorPayload("slow", "done"),
+                ToolJsonContext.Default.ToolErrorPayload);
+        }
+    }
+
+    private sealed class ThrowingTool : ITool
+    {
+        public string Description => "Throwing tool";
+
         public string Name => "exploding_tool";
+
+        public string Schema => """{ "type": "object", "properties": {}, "additionalProperties": false }""";
 
         public Task<ToolResult> ExecuteAsync(
             ToolExecutionContext context,

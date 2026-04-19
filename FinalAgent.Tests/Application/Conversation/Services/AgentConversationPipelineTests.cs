@@ -1,7 +1,9 @@
+using System.Text.Json;
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Conversation.Services;
 using FinalAgent.Application.Exceptions;
 using FinalAgent.Application.Models;
+using FinalAgent.Application.Tools.Serialization;
 using FinalAgent.Domain.Models;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,10 +31,19 @@ public sealed class AgentConversationPipelineTests
             .Setup(accessor => accessor.GetSettings())
             .Returns(new ConversationSettings("You are helpful.", TimeSpan.FromSeconds(30)));
 
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([
+                CreateToolDefinition("file_read")
+            ]);
+
         Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
         providerClient
             .Setup(client => client.SendAsync(
-                It.IsAny<ConversationProviderRequest>(),
+                It.Is<ConversationProviderRequest>(request =>
+                    request.AvailableTools.Count == 1 &&
+                    request.AvailableTools[0].Name == "file_read"),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ConversationProviderPayload(
                 ProviderKind.OpenAiCompatible,
@@ -51,6 +62,7 @@ public sealed class AgentConversationPipelineTests
             providerClient.Object,
             responseMapper.Object,
             toolExecutionPipeline.Object,
+            toolRegistry.Object,
             configurationAccessor.Object);
 
         ConversationTurnResult result = await sut.ProcessAsync(
@@ -76,6 +88,13 @@ public sealed class AgentConversationPipelineTests
             .Setup(accessor => accessor.GetSettings())
             .Returns(new ConversationSettings(null, TimeSpan.FromSeconds(30)));
 
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([
+                CreateToolDefinition("directory_list")
+            ]);
+
         Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
         providerClient
             .Setup(client => client.SendAsync(
@@ -91,20 +110,24 @@ public sealed class AgentConversationPipelineTests
             .Setup(mapper => mapper.Map(It.IsAny<ConversationProviderPayload>()))
             .Returns(new ConversationResponse(
                 null,
-                [new ConversationToolCall("call_1", "list_models", "{}")],
+                [new ConversationToolCall("call_1", "directory_list", "{}")],
                 "resp_456"));
 
         Mock<IToolExecutionPipeline> toolExecutionPipeline = new(MockBehavior.Strict);
         toolExecutionPipeline
             .Setup(pipeline => pipeline.ExecuteAsync(
-                It.Is<IReadOnlyList<ConversationToolCall>>(calls => calls.Count == 1 && calls[0].Name == "list_models"),
+                It.Is<IReadOnlyList<ConversationToolCall>>(calls => calls.Count == 1 && calls[0].Name == "directory_list"),
                 Session,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ToolExecutionBatchResult([
                 new ToolInvocationResult(
                     "call_1",
-                    "list_models",
-                    ToolResult.Success("Available models:\n- gpt-5-mini (active)"))
+                    "directory_list",
+                    ToolResultFactory.Success(
+                        "Listed directory '.'.",
+                        new ToolErrorPayload("ok", "ok"),
+                        ToolJsonContext.Default.ToolErrorPayload,
+                        new ToolRenderPayload("Directory listing: .", "file: README.md")))
             ]));
 
         AgentConversationPipeline sut = CreateSut(
@@ -112,6 +135,7 @@ public sealed class AgentConversationPipelineTests
             providerClient.Object,
             responseMapper.Object,
             toolExecutionPipeline.Object,
+            toolRegistry.Object,
             configurationAccessor.Object);
 
         ConversationTurnResult result = await sut.ProcessAsync(
@@ -120,10 +144,10 @@ public sealed class AgentConversationPipelineTests
             CancellationToken.None);
 
         result.Kind.Should().Be(ConversationTurnResultKind.ToolExecution);
-        result.ResponseText.Should().Contain("Available models");
+        result.ResponseText.Should().Contain("Directory listing");
         result.ToolExecutionResult.Should().NotBeNull();
         result.ToolExecutionResult!.Results.Should().ContainSingle();
-        result.ToolExecutionResult.Results[0].ToolName.Should().Be("list_models");
+        result.ToolExecutionResult.Results[0].ToolName.Should().Be("directory_list");
     }
 
     [Fact]
@@ -139,6 +163,7 @@ public sealed class AgentConversationPipelineTests
             Mock.Of<IConversationProviderClient>(),
             Mock.Of<IConversationResponseMapper>(),
             Mock.Of<IToolExecutionPipeline>(),
+            Mock.Of<IToolRegistry>(),
             Mock.Of<IConversationConfigurationAccessor>());
 
         Func<Task> action = () => sut.ProcessAsync("hello", Session, CancellationToken.None);
@@ -160,6 +185,13 @@ public sealed class AgentConversationPipelineTests
             .Setup(accessor => accessor.GetSettings())
             .Returns(new ConversationSettings(null, TimeSpan.FromSeconds(30)));
 
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([
+                CreateToolDefinition("shell_command")
+            ]);
+
         Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
         providerClient
             .Setup(client => client.SendAsync(
@@ -172,6 +204,7 @@ public sealed class AgentConversationPipelineTests
             providerClient.Object,
             Mock.Of<IConversationResponseMapper>(),
             Mock.Of<IToolExecutionPipeline>(),
+            toolRegistry.Object,
             configurationAccessor.Object);
 
         Func<Task> action = () => sut.ProcessAsync("hello", Session, CancellationToken.None);
@@ -185,6 +218,7 @@ public sealed class AgentConversationPipelineTests
         IConversationProviderClient providerClient,
         IConversationResponseMapper responseMapper,
         IToolExecutionPipeline toolExecutionPipeline,
+        IToolRegistry toolRegistry,
         IConversationConfigurationAccessor configurationAccessor)
     {
         return new AgentConversationPipeline(
@@ -192,7 +226,19 @@ public sealed class AgentConversationPipelineTests
             providerClient,
             responseMapper,
             toolExecutionPipeline,
+            toolRegistry,
             configurationAccessor,
             NullLogger<AgentConversationPipeline>.Instance);
+    }
+
+    private static ToolDefinition CreateToolDefinition(string name)
+    {
+        using JsonDocument schemaDocument = JsonDocument.Parse(
+            """{ "type": "object", "properties": {}, "additionalProperties": false }""");
+
+        return new ToolDefinition(
+            name,
+            $"Description for {name}",
+            schemaDocument.RootElement.Clone());
     }
 }

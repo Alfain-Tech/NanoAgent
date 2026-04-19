@@ -1,8 +1,12 @@
+using FinalAgent.Application.Models;
+
 namespace FinalAgent.Application.Abstractions;
 
 public interface IToolRegistry
 {
+    IReadOnlyList<ToolDefinition> GetToolDefinitions();
+
     IReadOnlyList<string> GetRegisteredToolNames();
 
-    bool TryResolve(string toolName, out IAgentTool? tool);
+    bool TryResolve(string toolName, out ITool? tool);
 }

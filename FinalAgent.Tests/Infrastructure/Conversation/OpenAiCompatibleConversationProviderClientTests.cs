@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -34,7 +35,8 @@ public sealed class OpenAiCompatibleConversationProviderClientTests
                 "test-key",
                 "gpt-4.1",
                 "Explain the diff.",
-                "You are helpful."),
+                "You are helpful.",
+                [CreateToolDefinition("file_read")]),
             CancellationToken.None);
 
         handler.RequestUri.Should().Be(new Uri("http://127.0.0.1:1234/v1/chat/completions"));
@@ -43,7 +45,20 @@ public sealed class OpenAiCompatibleConversationProviderClientTests
         handler.RequestBody.Should().Contain("\"model\":\"gpt-4.1\"");
         handler.RequestBody.Should().Contain("\"role\":\"system\"");
         handler.RequestBody.Should().Contain("\"role\":\"user\"");
+        handler.RequestBody.Should().Contain("\"tools\"");
+        handler.RequestBody.Should().Contain("\"name\":\"file_read\"");
         payload.ResponseId.Should().Be("req_789");
+    }
+
+    private static ToolDefinition CreateToolDefinition(string name)
+    {
+        using JsonDocument schemaDocument = JsonDocument.Parse(
+            """{ "type": "object", "properties": {}, "additionalProperties": false }""");
+
+        return new ToolDefinition(
+            name,
+            $"Description for {name}",
+            schemaDocument.RootElement.Clone());
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

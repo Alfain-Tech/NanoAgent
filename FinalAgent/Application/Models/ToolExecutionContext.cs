@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace FinalAgent.Application.Models;
 
 public sealed class ToolExecutionContext
@@ -5,21 +7,27 @@ public sealed class ToolExecutionContext
     public ToolExecutionContext(
         string toolCallId,
         string toolName,
-        string argumentsJson,
+        JsonElement arguments,
         ReplSessionContext session)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolCallId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
-        ArgumentNullException.ThrowIfNull(argumentsJson);
         ArgumentNullException.ThrowIfNull(session);
 
         ToolCallId = toolCallId.Trim();
         ToolName = toolName.Trim();
-        ArgumentsJson = argumentsJson;
+        if (arguments.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException(
+                "Tool arguments must be a JSON object.",
+                nameof(arguments));
+        }
+
+        Arguments = arguments;
         Session = session;
     }
 
-    public string ArgumentsJson { get; }
+    public JsonElement Arguments { get; }
 
     public ReplSessionContext Session { get; }
 

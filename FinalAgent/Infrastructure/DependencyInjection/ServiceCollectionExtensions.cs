@@ -4,6 +4,7 @@ using FinalAgent.Infrastructure.Secrets;
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Infrastructure.Models;
 using FinalAgent.Infrastructure.Storage;
+using FinalAgent.Infrastructure.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -20,6 +21,9 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddSingleton<IUserDataPathProvider, UserDataPathProvider>();
+        services.AddSingleton<IWorkspaceRootProvider, CurrentDirectoryWorkspaceRootProvider>();
+        services.AddSingleton<IWorkspaceFileService, WorkspaceFileService>();
+        services.AddSingleton<IShellCommandService, ShellCommandService>();
         services.AddSingleton<IAgentConfigurationStore, JsonAgentConfigurationStore>();
         services.AddSingleton<IApiKeySecretStore, ApiKeySecretStore>();
         services.AddSingleton<IModelCache, InMemoryModelCache>();

@@ -1,40 +1,81 @@
+using System.Text.Json;
 using FinalAgent.Application.Abstractions;
+using FinalAgent.Application.Models;
 
 namespace FinalAgent.Application.Tools.Services;
 
 internal sealed class ToolRegistry : IToolRegistry
 {
-    private readonly IReadOnlyDictionary<string, IAgentTool> _tools;
+    private readonly IReadOnlyList<ToolDefinition> _toolDefinitions;
+    private readonly IReadOnlyDictionary<string, ITool> _tools;
 
-    public ToolRegistry(IEnumerable<IAgentTool> tools)
+    public ToolRegistry(IEnumerable<ITool> tools)
     {
         ArgumentNullException.ThrowIfNull(tools);
 
-        Dictionary<string, IAgentTool> toolMap = new(StringComparer.Ordinal);
+        Dictionary<string, ITool> toolMap = new(StringComparer.Ordinal);
+        List<ToolDefinition> definitions = [];
 
-        foreach (IAgentTool tool in tools)
+        foreach (ITool tool in tools)
         {
+            if (string.IsNullOrWhiteSpace(tool.Description))
+            {
+                throw new InvalidOperationException(
+                    $"Tool '{tool.Name}' must provide a description.");
+            }
+
             if (!toolMap.TryAdd(tool.Name, tool))
             {
                 throw new InvalidOperationException(
                     $"Duplicate tool registration detected for '{tool.Name}'.");
             }
+
+            definitions.Add(new ToolDefinition(
+                tool.Name,
+                tool.Description,
+                ParseSchema(tool)));
         }
 
         _tools = toolMap;
+        _toolDefinitions = definitions
+            .OrderBy(static definition => definition.Name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public IReadOnlyList<ToolDefinition> GetToolDefinitions()
+    {
+        return _toolDefinitions;
     }
 
     public IReadOnlyList<string> GetRegisteredToolNames()
     {
-        return _tools.Keys
-            .OrderBy(static toolName => toolName, StringComparer.Ordinal)
+        return _toolDefinitions
+            .Select(static definition => definition.Name)
             .ToArray();
     }
 
-    public bool TryResolve(string toolName, out IAgentTool? tool)
+    public bool TryResolve(string toolName, out ITool? tool)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
 
         return _tools.TryGetValue(toolName.Trim(), out tool);
+    }
+
+    private static JsonElement ParseSchema(ITool tool)
+    {
+        if (string.IsNullOrWhiteSpace(tool.Schema))
+        {
+            throw new InvalidOperationException(
+                $"Tool '{tool.Name}' must provide a JSON schema.");
+        }
+
+        using JsonDocument schemaDocument = JsonDocument.Parse(tool.Schema);
+        if (schemaDocument.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException(
+                $"Tool '{tool.Name}' must provide a JSON-object schema.");
+        }
+
+        return schemaDocument.RootElement.Clone();
     }
 }

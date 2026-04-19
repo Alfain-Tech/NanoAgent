@@ -20,6 +20,11 @@ internal sealed class ProcessRunner : IProcessRunner
             CreateNoWindow = true
         };
 
+        if (!string.IsNullOrWhiteSpace(request.WorkingDirectory))
+        {
+            startInfo.WorkingDirectory = request.WorkingDirectory;
+        }
+
         foreach (string argument in request.Arguments)
         {
             startInfo.ArgumentList.Add(argument);

@@ -1,0 +1,108 @@
+using System.Text.Json;
+using FinalAgent.Application.Abstractions;
+using FinalAgent.Application.Models;
+using FinalAgent.Application.Tools.Models;
+using FinalAgent.Application.Tools.Serialization;
+
+namespace FinalAgent.Application.Tools;
+
+internal sealed class ShellCommandTool : ITool
+{
+    private readonly IShellCommandService _shellCommandService;
+
+    public ShellCommandTool(IShellCommandService shellCommandService)
+    {
+        _shellCommandService = shellCommandService;
+    }
+
+    public string Description => "Run a shell command in the current workspace and capture stdout, stderr, and exit code.";
+
+    public string Name => AgentToolNames.ShellCommand;
+
+    public string Schema => """
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Shell command to execute."
+            },
+            "workingDirectory": {
+              "type": "string",
+              "description": "Optional working directory relative to the workspace root."
+            }
+          },
+          "required": ["command"],
+          "additionalProperties": false
+        }
+        """;
+
+    public async Task<ToolResult> ExecuteAsync(
+        ToolExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!TryGetRequiredString(context.Arguments, "command", out string? command))
+        {
+            return ToolResultFactory.InvalidArguments(
+                "missing_command",
+                "Tool 'shell_command' requires a non-empty 'command' string.",
+                new ToolRenderPayload(
+                    "Invalid shell_command arguments",
+                    "Provide a non-empty 'command' string."));
+        }
+
+        string safeCommand = command!;
+
+        ShellCommandExecutionResult result = await _shellCommandService.ExecuteAsync(
+            new ShellCommandExecutionRequest(
+                safeCommand,
+                TryGetOptionalString(context.Arguments, "workingDirectory")),
+            cancellationToken);
+
+        string renderText =
+            $"Working directory: {result.WorkingDirectory}{Environment.NewLine}" +
+            $"Exit code: {result.ExitCode}{Environment.NewLine}" +
+            $"STDOUT:{Environment.NewLine}{result.StandardOutput}{Environment.NewLine}{Environment.NewLine}" +
+            $"STDERR:{Environment.NewLine}{result.StandardError}";
+
+        return ToolResultFactory.Success(
+            $"Executed shell command '{result.Command}' with exit code {result.ExitCode}.",
+            result,
+            ToolJsonContext.Default.ShellCommandExecutionResult,
+            new ToolRenderPayload(
+                $"Shell command: {result.Command}",
+                renderText));
+    }
+
+    private static string? TryGetOptionalString(
+        JsonElement arguments,
+        string propertyName)
+    {
+        if (arguments.TryGetProperty(propertyName, out JsonElement property) &&
+            property.ValueKind == JsonValueKind.String)
+        {
+            return property.GetString()?.Trim();
+        }
+
+        return null;
+    }
+
+    private static bool TryGetRequiredString(
+        JsonElement arguments,
+        string propertyName,
+        out string? value)
+    {
+        if (arguments.TryGetProperty(propertyName, out JsonElement property) &&
+            property.ValueKind == JsonValueKind.String)
+        {
+            value = property.GetString()?.Trim();
+            return !string.IsNullOrWhiteSpace(value);
+        }
+
+        value = null;
+        return false;
+    }
+}

@@ -7,4 +7,5 @@ public sealed record ConversationProviderRequest(
     string ApiKey,
     string ModelId,
     string UserInput,
-    string? SystemPrompt);
+    string? SystemPrompt,
+    IReadOnlyList<ToolDefinition> AvailableTools);

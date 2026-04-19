@@ -24,6 +24,11 @@ public sealed class ToolInvocationResult
 
     public string ToDisplayText()
     {
+        if (Result.RenderPayload is not null)
+        {
+            return $"{Result.RenderPayload.Title}{Environment.NewLine}{Result.RenderPayload.Text}";
+        }
+
         string prefix = Result.Status switch
         {
             ToolResultStatus.Success => $"Tool '{ToolName}' completed.",
