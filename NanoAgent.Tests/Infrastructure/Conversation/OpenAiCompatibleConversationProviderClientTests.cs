@@ -97,6 +97,63 @@ public sealed class OpenAiCompatibleConversationProviderClientTests
         payload.ResponseId.Should().Be("req_789");
     }
 
+    [Fact]
+    public async Task SendAsync_Should_PreserveStructuredToolFeedbackJson_When_ToolMessagesContainStatusMetadata()
+    {
+        RecordingHandler handler = new("""
+            {
+              "id": "resp_3",
+              "choices": [
+                {
+                  "message": {
+                    "content": "Adjusted after tool feedback."
+                  }
+                }
+              ]
+            }
+            """);
+        HttpClient httpClient = new(handler);
+        OpenAiCompatibleConversationProviderClient sut = new(httpClient);
+
+        string toolFeedbackJson = """
+            {
+              "ToolName": "shell_command",
+              "Status": "ExecutionError",
+              "IsSuccess": false,
+              "Message": "The command exited with code 1.",
+              "Data": {
+                "Code": "exit_code_1",
+                "Message": "The command exited with code 1."
+              }
+            }
+            """;
+
+        await sut.SendAsync(
+            new ConversationProviderRequest(
+                new AgentProviderProfile(ProviderKind.OpenAiCompatible, "http://127.0.0.1:1234/v1"),
+                "test-key",
+                "gpt-4.1",
+                [
+                    ConversationRequestMessage.User("Run tests and fix failures."),
+                    ConversationRequestMessage.ToolResult("call_2", toolFeedbackJson)
+                ],
+                "You are helpful.",
+                [CreateToolDefinition("shell_command")]),
+            CancellationToken.None);
+
+        using JsonDocument requestDocument = JsonDocument.Parse(handler.RequestBody!);
+        JsonElement toolMessage = requestDocument.RootElement
+            .GetProperty("messages")[2];
+
+        toolMessage.GetProperty("tool_call_id").GetString().Should().Be("call_2");
+
+        using JsonDocument toolContentDocument = JsonDocument.Parse(toolMessage.GetProperty("content").GetString()!);
+        JsonElement toolContent = toolContentDocument.RootElement;
+        toolContent.GetProperty("ToolName").GetString().Should().Be("shell_command");
+        toolContent.GetProperty("Status").GetString().Should().Be("ExecutionError");
+        toolContent.GetProperty("IsSuccess").GetBoolean().Should().BeFalse();
+    }
+
     private static ToolDefinition CreateToolDefinition(string name)
     {
         using JsonDocument schemaDocument = JsonDocument.Parse(

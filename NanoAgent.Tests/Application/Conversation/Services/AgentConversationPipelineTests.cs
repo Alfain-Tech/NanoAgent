@@ -182,7 +182,117 @@ public sealed class AgentConversationPipelineTests
         followUpRequest.Messages[1].ToolCalls[0].Name.Should().Be("directory_list");
         followUpRequest.Messages[2].Role.Should().Be("tool");
         followUpRequest.Messages[2].ToolCallId.Should().Be("call_1");
-        followUpRequest.Messages[2].Content.Should().Be("""{"Code":"ok","Message":"ok"}""");
+
+        using JsonDocument toolFeedbackDocument = JsonDocument.Parse(followUpRequest.Messages[2].Content!);
+        JsonElement toolFeedback = toolFeedbackDocument.RootElement;
+        toolFeedback.GetProperty("ToolName").GetString().Should().Be("directory_list");
+        toolFeedback.GetProperty("Status").GetString().Should().Be("Success");
+        toolFeedback.GetProperty("IsSuccess").GetBoolean().Should().BeTrue();
+        toolFeedback.GetProperty("Message").GetString().Should().Be("Listed directory '.'.");
+        toolFeedback.GetProperty("Render").GetProperty("Title").GetString().Should().Be("Directory listing: .");
+        toolFeedback.GetProperty("Data").GetProperty("Code").GetString().Should().Be("ok");
+        toolFeedback.GetProperty("Data").GetProperty("Message").GetString().Should().Be("ok");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Should_SendStructuredFailureFeedback_When_ToolExecutionFails()
+    {
+        Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
+        secretStore
+            .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("test-key");
+
+        Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
+        configurationAccessor
+            .Setup(accessor => accessor.GetSettings())
+            .Returns(new ConversationSettings(null, TimeSpan.FromSeconds(30)));
+
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([
+                CreateToolDefinition("file_write")
+            ]);
+
+        Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
+        ConversationProviderRequest? followUpRequest = null;
+        providerClient
+            .Setup(client => client.SendAsync(
+                It.IsAny<ConversationProviderRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ConversationProviderRequest, CancellationToken>((request, _) =>
+            {
+                if (request.Messages.Count > 1)
+                {
+                    followUpRequest = request;
+                }
+
+                return Task.FromResult(request.Messages.Count == 1
+                    ? new ConversationProviderPayload(
+                        ProviderKind.OpenAiCompatible,
+                        """{ "choices": [] }""",
+                        "resp_fail_1")
+                    : new ConversationProviderPayload(
+                        ProviderKind.OpenAiCompatible,
+                        """{ "choices": [] }""",
+                        "resp_fail_2"));
+            });
+
+        Mock<IConversationResponseMapper> responseMapper = new(MockBehavior.Strict);
+        responseMapper
+            .SetupSequence(mapper => mapper.Map(It.IsAny<ConversationProviderPayload>()))
+            .Returns(new ConversationResponse(
+                null,
+                [new ConversationToolCall("call_fail_1", "file_write", """{"path":"index.html"}""")],
+                "resp_fail_1"))
+            .Returns(new ConversationResponse(
+                "The write failed because the tool arguments were incomplete.",
+                [],
+                "resp_fail_2"));
+
+        Mock<IToolExecutionPipeline> toolExecutionPipeline = new(MockBehavior.Strict);
+        toolExecutionPipeline
+            .Setup(pipeline => pipeline.ExecuteAsync(
+                It.Is<IReadOnlyList<ConversationToolCall>>(calls => calls.Count == 1 && calls[0].Name == "file_write"),
+                Session,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ToolExecutionBatchResult([
+                new ToolInvocationResult(
+                    "call_fail_1",
+                    "file_write",
+                    ToolResultFactory.InvalidArguments(
+                        "missing_content",
+                        "The 'content' argument is required.",
+                        new ToolRenderPayload("File write rejected", "The tool needs both path and content.")))
+            ]));
+
+        AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
+            secretStore.Object,
+            providerClient.Object,
+            responseMapper.Object,
+            toolExecutionPipeline.Object,
+            toolRegistry.Object,
+            configurationAccessor.Object);
+
+        ConversationTurnResult result = await sut.ProcessAsync(
+            "Write the homepage file.",
+            Session,
+            CancellationToken.None);
+
+        result.Kind.Should().Be(ConversationTurnResultKind.AssistantMessage);
+        result.ResponseText.Should().Be("The write failed because the tool arguments were incomplete.");
+        followUpRequest.Should().NotBeNull();
+
+        using JsonDocument toolFeedbackDocument = JsonDocument.Parse(followUpRequest!.Messages[2].Content!);
+        JsonElement toolFeedback = toolFeedbackDocument.RootElement;
+        toolFeedback.GetProperty("ToolName").GetString().Should().Be("file_write");
+        toolFeedback.GetProperty("Status").GetString().Should().Be("InvalidArguments");
+        toolFeedback.GetProperty("IsSuccess").GetBoolean().Should().BeFalse();
+        toolFeedback.GetProperty("Message").GetString().Should().Be("The 'content' argument is required.");
+        toolFeedback.GetProperty("Data").GetProperty("Code").GetString().Should().Be("missing_content");
+        toolFeedback.GetProperty("Render").GetProperty("Title").GetString().Should().Be("File write rejected");
     }
 
     [Fact]

@@ -82,6 +82,21 @@ public sealed class ConversationOptions
     8. After implementation, validate with a relevant shell command when practical.
     9. Once you have enough evidence, stop calling tools and provide the result clearly.
 
+    Tool feedback loop:
+    - After each tool call, you receive a structured tool feedback JSON object instead of a raw untyped string.
+    - The tool feedback object contains:
+      - toolName
+      - status
+      - isSuccess
+      - message
+      - data
+      - render (optional)
+    - Always inspect the tool feedback before deciding the next action.
+    - If isSuccess is true but the user requested a larger result, continue with the next required tool step instead of stopping early.
+    - If isSuccess is false, use status, message, and data to correct the next tool call or explain the blocker clearly.
+    - Do not blindly repeat a failed tool call with the same arguments unless the feedback shows the previous failure was transient.
+    - For file creation or editing tasks, verify the expected files and contents using additional tools when needed before declaring the task complete.
+
     Tool argument rules:
     - Use workspace-relative paths unless the tool result clearly requires another path.
     - Do not include commentary, markdown, or pseudo-code inside tool arguments.

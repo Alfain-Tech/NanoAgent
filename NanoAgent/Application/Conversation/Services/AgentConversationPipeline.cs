@@ -1,8 +1,10 @@
 using NanoAgent.Application.Abstractions;
+using NanoAgent.Application.Conversation.Serialization;
 using NanoAgent.Application.Exceptions;
 using NanoAgent.Application.Logging;
 using NanoAgent.Application.Models;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace NanoAgent.Application.Conversation.Services;
 
@@ -150,7 +152,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 {
                     messages.Add(ConversationRequestMessage.ToolResult(
                         invocationResult.ToolCallId,
-                        invocationResult.Result.JsonResult));
+                        CreateToolFeedbackContent(invocationResult)));
                 }
 
                 continue;
@@ -186,5 +188,30 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             ? completionTokens.Value
             : _tokenEstimator.Estimate(responseText);
         return new ConversationTurnMetrics(elapsed, estimatedOutputTokens);
+    }
+
+    private static string CreateToolFeedbackContent(ToolInvocationResult invocationResult)
+    {
+        ArgumentNullException.ThrowIfNull(invocationResult);
+
+        using JsonDocument dataDocument = JsonDocument.Parse(invocationResult.Result.JsonResult);
+
+        ToolFeedbackRenderPayload? render = invocationResult.Result.RenderPayload is null
+            ? null
+            : new ToolFeedbackRenderPayload(
+                invocationResult.Result.RenderPayload.Title,
+                invocationResult.Result.RenderPayload.Text);
+
+        ToolFeedbackPayload payload = new(
+            invocationResult.ToolName,
+            invocationResult.Result.Status,
+            invocationResult.Result.IsSuccess,
+            invocationResult.Result.Message,
+            dataDocument.RootElement.Clone(),
+            render);
+
+        return JsonSerializer.Serialize(
+            payload,
+            ConversationJsonContext.Default.ToolFeedbackPayload);
     }
 }
