@@ -44,7 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOnboardingInputValidator, OnboardingInputValidator>();
         services.AddSingleton<IModelActivationService, ModelActivationService>();
         services.AddSingleton<IAgentProviderProfileFactory, AgentProviderProfileFactory>();
-        services.AddSingleton<IModelSelectionPolicy, RankedModelSelectionPolicy>();
+        services.AddSingleton<IModelSelectionPolicy, ConfiguredOrFirstModelSelectionPolicy>();
 
         return services;
     }

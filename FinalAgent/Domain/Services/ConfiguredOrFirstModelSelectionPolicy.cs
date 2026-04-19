@@ -4,7 +4,7 @@ using FinalAgent.Domain.Models;
 
 namespace FinalAgent.Domain.Services;
 
-internal sealed class RankedModelSelectionPolicy : IModelSelectionPolicy
+internal sealed class ConfiguredOrFirstModelSelectionPolicy : IModelSelectionPolicy
 {
     public ModelSelectionDecision Select(ModelSelectionContext context)
     {
@@ -30,30 +30,15 @@ internal sealed class RankedModelSelectionPolicy : IModelSelectionPolicy
                 configuredDefaultModel);
         }
 
-        foreach (string rankedPreference in context.RankedPreferenceList)
-        {
-            string? matchedRankedModel = ResolvePreferredModelId(
-                context.AvailableModels,
-                rankedPreference);
+        AvailableModel firstReturnedModel = context.AvailableModels[0];
 
-            if (matchedRankedModel is not null)
-            {
-                return new ModelSelectionDecision(
-                    matchedRankedModel,
-                    ModelSelectionSource.RankedPreference,
-                    configuredDefaultModel is null
-                        ? ConfiguredDefaultModelStatus.NotConfigured
-                        : ConfiguredDefaultModelStatus.NotFound,
-                    configuredDefaultModel);
-            }
-        }
-
-        string configuredModelMessage = configuredDefaultModel is null
-            ? "No configured default model was provided."
-            : $"Configured default model '{configuredDefaultModel}' was not returned by the provider.";
-
-        throw new ModelSelectionException(
-            $"{configuredModelMessage} None of the ranked preference models are available.");
+        return new ModelSelectionDecision(
+            firstReturnedModel.Id,
+            ModelSelectionSource.FirstReturnedModel,
+            configuredDefaultModel is null
+                ? ConfiguredDefaultModelStatus.NotConfigured
+                : ConfiguredDefaultModelStatus.NotFound,
+            configuredDefaultModel);
     }
 
     private static string? ResolvePreferredModelId(

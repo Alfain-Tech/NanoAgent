@@ -44,14 +44,6 @@ public sealed class ApplicationOptionsValidator : IValidateOptions<ApplicationOp
             {
                 failures.Add($"{ApplicationOptions.SectionName}:ModelSelection:CacheDurationSeconds must be greater than zero.");
             }
-
-            bool hasRankedPreferences = options.ModelSelection.RankedPreferenceList
-                .Any(value => !string.IsNullOrWhiteSpace(value));
-
-            if (!hasRankedPreferences)
-            {
-                failures.Add($"{ApplicationOptions.SectionName}:ModelSelection:RankedPreferenceList must contain at least one model identifier.");
-            }
         }
 
         return failures.Count == 0

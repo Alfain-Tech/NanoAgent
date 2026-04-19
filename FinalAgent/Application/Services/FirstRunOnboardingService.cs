@@ -59,23 +59,24 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
 
     public async Task<OnboardingResult> EnsureOnboardedAsync(CancellationToken cancellationToken)
     {
-        AgentProviderProfile? existingConfiguration = await _configurationStore.LoadAsync(cancellationToken);
+        AgentConfiguration? existingConfiguration = await _configurationStore.LoadAsync(cancellationToken);
+        AgentProviderProfile? existingProfile = existingConfiguration?.ProviderProfile;
         string? existingApiKey = await _secretStore.LoadAsync(cancellationToken);
 
-        if (existingConfiguration is not null && !string.IsNullOrWhiteSpace(existingApiKey))
+        if (existingProfile is not null && !string.IsNullOrWhiteSpace(existingApiKey))
         {
             ApplicationLogMessages.ExistingOnboardingDetected(
                 _logger,
-                existingConfiguration.ProviderKind.ToDisplayName());
+                existingProfile.ProviderKind.ToDisplayName());
 
             await _statusMessageWriter.ShowInfoAsync(
-                $"Using existing provider configuration: {existingConfiguration.ProviderKind.ToDisplayName()}.",
+                $"Using existing provider configuration: {existingProfile.ProviderKind.ToDisplayName()}.",
                 cancellationToken);
 
-            return new OnboardingResult(existingConfiguration, WasOnboardedDuringCurrentRun: false);
+            return new OnboardingResult(existingProfile, WasOnboardedDuringCurrentRun: false);
         }
 
-        if (existingConfiguration is not null || !string.IsNullOrWhiteSpace(existingApiKey))
+        if (existingProfile is not null || !string.IsNullOrWhiteSpace(existingApiKey))
         {
             ApplicationLogMessages.IncompleteOnboardingDetected(_logger);
 
@@ -127,7 +128,9 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
             _inputValidator.ValidateApiKey,
             cancellationToken);
 
-        await _configurationStore.SaveAsync(profile, cancellationToken);
+        await _configurationStore.SaveAsync(
+            new AgentConfiguration(profile, PreferredModelId: null),
+            cancellationToken);
         await _secretStore.SaveAsync(apiKey, cancellationToken);
 
         await _statusMessageWriter.ShowSuccessAsync(

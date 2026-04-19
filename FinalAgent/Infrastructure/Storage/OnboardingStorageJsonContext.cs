@@ -1,3 +1,4 @@
+using FinalAgent.Application.Models;
 using System.Text.Json.Serialization;
 using FinalAgent.Domain.Models;
 
@@ -7,6 +8,7 @@ namespace FinalAgent.Infrastructure.Storage;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     UseStringEnumConverter = true,
     WriteIndented = true)]
+[JsonSerializable(typeof(AgentConfiguration))]
 [JsonSerializable(typeof(AgentProviderProfile))]
 internal sealed partial class OnboardingStorageJsonContext : JsonSerializerContext
 {

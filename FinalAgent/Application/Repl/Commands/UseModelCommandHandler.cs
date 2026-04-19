@@ -5,11 +5,15 @@ namespace FinalAgent.Application.Repl.Commands;
 
 internal sealed class UseModelCommandHandler : IReplCommandHandler
 {
+    private readonly IAgentConfigurationStore _configurationStore;
     private readonly IModelActivationService _modelActivationService;
 
-    public UseModelCommandHandler(IModelActivationService modelActivationService)
+    public UseModelCommandHandler(
+        IModelActivationService modelActivationService,
+        IAgentConfigurationStore configurationStore)
     {
         _modelActivationService = modelActivationService;
+        _configurationStore = configurationStore;
     }
 
     public string CommandName => "use";
@@ -18,7 +22,7 @@ internal sealed class UseModelCommandHandler : IReplCommandHandler
 
     public string Usage => "/use <model>";
 
-    public Task<ReplCommandResult> ExecuteAsync(
+    public async Task<ReplCommandResult> ExecuteAsync(
         ReplCommandContext context,
         CancellationToken cancellationToken)
     {
@@ -27,9 +31,9 @@ internal sealed class UseModelCommandHandler : IReplCommandHandler
 
         if (string.IsNullOrWhiteSpace(context.ArgumentText))
         {
-            return Task.FromResult(ReplCommandResult.Continue(
+            return ReplCommandResult.Continue(
                 "Usage: /use <model>",
-                ReplFeedbackKind.Error));
+                ReplFeedbackKind.Error);
         }
 
         string requestedModel = context.ArgumentText.Trim();
@@ -37,7 +41,16 @@ internal sealed class UseModelCommandHandler : IReplCommandHandler
             context.Session,
             requestedModel);
 
-        return Task.FromResult(result.Status switch
+        if (result.Status == ModelActivationStatus.Switched)
+        {
+            await _configurationStore.SaveAsync(
+                new AgentConfiguration(
+                    context.Session.ProviderProfile,
+                    result.ResolvedModelId),
+                cancellationToken);
+        }
+
+        return result.Status switch
         {
             ModelActivationStatus.Switched =>
                 ReplCommandResult.Continue(
@@ -53,6 +66,6 @@ internal sealed class UseModelCommandHandler : IReplCommandHandler
                 ReplCommandResult.Continue(
                     $"Model '{requestedModel}' is not available. Use /models to see valid choices.",
                     ReplFeedbackKind.Error)
-        });
+        };
     }
 }

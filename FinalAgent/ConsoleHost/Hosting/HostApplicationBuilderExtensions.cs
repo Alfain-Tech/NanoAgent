@@ -12,13 +12,6 @@ public static class HostApplicationBuilderExtensions
 
         builder.Logging.ClearProviders();
         builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
-        builder.Logging.AddSimpleConsole(options =>
-        {
-            options.SingleLine = true;
-            options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
-            options.UseUtcTimestamp = false;
-            options.IncludeScopes = false;
-        });
 
         builder.Services.Configure<ConsoleLifetimeOptions>(options =>
         {

@@ -38,8 +38,9 @@ internal sealed class ReplRuntime : IReplRuntime
 
         ApplicationLogMessages.ReplStarted(_logger, session.ActiveModelId);
 
-        await _outputWriter.WriteInfoAsync(
-            $"Shell ready. Provider: {session.ProviderName}. Model: {session.ActiveModelId}. Type /help for commands.",
+        await _outputWriter.WriteShellHeaderAsync(
+            session.ApplicationName,
+            session.ActiveModelId,
             cancellationToken);
 
         while (true)

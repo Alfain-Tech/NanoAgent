@@ -30,7 +30,8 @@ public sealed class FirstRunOnboardingServiceTests
 
         Mock<IOnboardingInputValidator> inputValidator = new(MockBehavior.Strict);
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
-        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(existingProfile);
+        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AgentConfiguration(existingProfile, null));
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync("existing-key");
         Mock<IAgentProviderProfileFactory> profileFactory = new(MockBehavior.Strict);
@@ -54,7 +55,7 @@ public sealed class FirstRunOnboardingServiceTests
         secretPrompt.VerifyNoOtherCalls();
         confirmationPrompt.VerifyNoOtherCalls();
         statusMessageWriter.VerifyAll();
-        configurationStore.Verify(store => store.SaveAsync(It.IsAny<AgentProviderProfile>(), It.IsAny<CancellationToken>()), Times.Never);
+        configurationStore.Verify(store => store.SaveAsync(It.IsAny<AgentConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
         secretStore.Verify(store => store.SaveAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -95,8 +96,12 @@ public sealed class FirstRunOnboardingServiceTests
             .Returns(InputValidationResult.Success("sk-openai"));
 
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
-        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((AgentProviderProfile?)null);
-        configurationStore.Setup(store => store.SaveAsync(openAiProfile, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((AgentConfiguration?)null);
+        configurationStore
+            .Setup(store => store.SaveAsync(
+                new AgentConfiguration(openAiProfile, null),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
@@ -176,8 +181,12 @@ public sealed class FirstRunOnboardingServiceTests
             .Returns(InputValidationResult.Success("compatible-key"));
 
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
-        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((AgentProviderProfile?)null);
-        configurationStore.Setup(store => store.SaveAsync(compatibleProfile, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((AgentConfiguration?)null);
+        configurationStore
+            .Setup(store => store.SaveAsync(
+                new AgentConfiguration(compatibleProfile, null),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
@@ -229,7 +238,8 @@ public sealed class FirstRunOnboardingServiceTests
 
         Mock<IOnboardingInputValidator> inputValidator = new(MockBehavior.Strict);
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
-        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(existingProfile);
+        configurationStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AgentConfiguration(existingProfile, null));
 
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore.Setup(store => store.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);

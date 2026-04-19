@@ -7,21 +7,36 @@ namespace FinalAgent.Infrastructure.Storage;
 internal sealed class UserDataPathProvider : IUserDataPathProvider
 {
     private const string ConfigurationFileName = "agent-profile.json";
+    private const string LogsDirectoryName = "logs";
 
-    private readonly ApplicationOptions _options;
+    private readonly IOptions<ApplicationOptions> _options;
 
     public UserDataPathProvider(IOptions<ApplicationOptions> options)
     {
-        _options = options.Value;
+        _options = options;
     }
 
     public string GetConfigurationFilePath()
+    {
+        return Path.Combine(
+            GetApplicationDirectoryPath(),
+            ConfigurationFileName);
+    }
+
+    public string GetLogsDirectoryPath()
+    {
+        return Path.Combine(
+            GetApplicationDirectoryPath(),
+            LogsDirectoryName);
+    }
+
+    private string GetApplicationDirectoryPath()
     {
         string root = ResolveFolder(
             Environment.SpecialFolder.ApplicationData,
             ".config");
 
-        return Path.Combine(root, _options.StorageDirectoryName, ConfigurationFileName);
+        return Path.Combine(root, _options.Value.StorageDirectoryName);
     }
 
     private static string ResolveFolder(Environment.SpecialFolder specialFolder, string fallbackRelativePath)

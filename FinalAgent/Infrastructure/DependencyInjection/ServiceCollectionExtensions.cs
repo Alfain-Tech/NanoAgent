@@ -1,5 +1,6 @@
 using FinalAgent.Infrastructure.Configuration;
 using FinalAgent.Infrastructure.Conversation;
+using FinalAgent.Infrastructure.Logging;
 using FinalAgent.Infrastructure.Secrets;
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Infrastructure.Models;
@@ -7,6 +8,7 @@ using FinalAgent.Infrastructure.Storage;
 using FinalAgent.Infrastructure.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace FinalAgent.Infrastructure.DependencyInjection;
@@ -30,8 +32,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IConversationConfigurationAccessor, ConversationConfigurationAccessor>();
         services.AddSingleton<IConversationResponseMapper, OpenAiConversationResponseMapper>();
         services.AddSingleton<IModelSelectionConfigurationAccessor, ModelSelectionConfigurationAccessor>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton<IPlatformCredentialStore>(CreatePlatformCredentialStore());
+        services.AddSingleton<ILoggerProvider, DailyFileLoggerProvider>();
         services.AddSingleton<IValidateOptions<ApplicationOptions>, ApplicationOptionsValidator>();
         services.AddHttpClient<IConversationProviderClient, OpenAiCompatibleConversationProviderClient>();
         services.AddHttpClient<IModelProviderClient, OpenAiCompatibleModelProviderClient>();

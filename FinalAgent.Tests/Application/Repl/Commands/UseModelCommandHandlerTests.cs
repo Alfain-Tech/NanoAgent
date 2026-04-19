@@ -1,8 +1,10 @@
+using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Models;
 using FinalAgent.Application.Repl.Commands;
 using FinalAgent.Application.Services;
 using FinalAgent.Domain.Models;
 using FluentAssertions;
+using Moq;
 
 namespace FinalAgent.Tests.Application.Repl.Commands;
 
@@ -11,7 +13,8 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_ReturnUsageError_When_ModelArgumentIsMissing()
     {
-        UseModelCommandHandler sut = new(new ModelActivationService());
+        Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
+        UseModelCommandHandler sut = new(new ModelActivationService(), configurationStore.Object);
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAi, null),
             "gpt-5-mini",
@@ -28,11 +31,17 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_SwitchActiveModel_When_ExactModelIdMatches()
     {
-        UseModelCommandHandler sut = new(new ModelActivationService());
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
             "qwen/qwen3-coder-30b",
             ["qwen/qwen3-coder-30b", "openai/gpt-oss-20b"]);
+        Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
+        configurationStore
+            .Setup(store => store.SaveAsync(
+                new AgentConfiguration(session.ProviderProfile, "openai/gpt-oss-20b"),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => Task.CompletedTask);
+        UseModelCommandHandler sut = new(new ModelActivationService(), configurationStore.Object);
 
         ReplCommandResult result = await sut.ExecuteAsync(
             new ReplCommandContext("use", "openai/gpt-oss-20b", ["openai/gpt-oss-20b"], "/use openai/gpt-oss-20b", session),
@@ -45,11 +54,17 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_SwitchActiveModel_When_UniqueTerminalSegmentMatches()
     {
-        UseModelCommandHandler sut = new(new ModelActivationService());
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
             "qwen/qwen3-coder-30b",
             ["qwen/qwen3-coder-30b", "openai/gpt-oss-20b"]);
+        Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
+        configurationStore
+            .Setup(store => store.SaveAsync(
+                new AgentConfiguration(session.ProviderProfile, "openai/gpt-oss-20b"),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => Task.CompletedTask);
+        UseModelCommandHandler sut = new(new ModelActivationService(), configurationStore.Object);
 
         ReplCommandResult result = await sut.ExecuteAsync(
             new ReplCommandContext("use", "gpt-oss-20b", ["gpt-oss-20b"], "/use gpt-oss-20b", session),
@@ -62,7 +77,8 @@ public sealed class UseModelCommandHandlerTests
     [Fact]
     public async Task ExecuteAsync_Should_ReturnError_When_ModelDoesNotExist()
     {
-        UseModelCommandHandler sut = new(new ModelActivationService());
+        Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
+        UseModelCommandHandler sut = new(new ModelActivationService(), configurationStore.Object);
         ReplSessionContext session = new(
             new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
             "qwen/qwen3-coder-30b",

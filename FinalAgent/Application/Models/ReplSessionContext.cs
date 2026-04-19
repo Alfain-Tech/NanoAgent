@@ -4,17 +4,29 @@ namespace FinalAgent.Application.Models;
 
 public sealed class ReplSessionContext
 {
+    private const string DefaultApplicationName = "FinalAgent";
     private readonly HashSet<string> _availableModelIds;
 
     public ReplSessionContext(
         AgentProviderProfile providerProfile,
         string activeModelId,
         IReadOnlyList<string> availableModelIds)
+        : this(DefaultApplicationName, providerProfile, activeModelId, availableModelIds)
     {
+    }
+
+    public ReplSessionContext(
+        string applicationName,
+        AgentProviderProfile providerProfile,
+        string activeModelId,
+        IReadOnlyList<string> availableModelIds)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(applicationName);
         ArgumentNullException.ThrowIfNull(providerProfile);
         ArgumentException.ThrowIfNullOrWhiteSpace(activeModelId);
         ArgumentNullException.ThrowIfNull(availableModelIds);
 
+        ApplicationName = applicationName.Trim();
         ProviderProfile = providerProfile;
         AvailableModelIds = availableModelIds
             .Where(static modelId => !string.IsNullOrWhiteSpace(modelId))
@@ -41,6 +53,8 @@ public sealed class ReplSessionContext
 
         ActiveModelId = normalizedActiveModelId;
     }
+
+    public string ApplicationName { get; }
 
     public string ActiveModelId { get; private set; }
 

@@ -1,10 +1,10 @@
-using FinalAgent.Domain.Models;
+using FinalAgent.Application.Models;
 
 namespace FinalAgent.Application.Abstractions;
 
 public interface IAgentConfigurationStore
 {
-    Task<AgentProviderProfile?> LoadAsync(CancellationToken cancellationToken);
+    Task<AgentConfiguration?> LoadAsync(CancellationToken cancellationToken);
 
-    Task SaveAsync(AgentProviderProfile configuration, CancellationToken cancellationToken);
+    Task SaveAsync(AgentConfiguration configuration, CancellationToken cancellationToken);
 }

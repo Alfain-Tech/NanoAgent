@@ -18,8 +18,7 @@ public sealed class ApplicationOptionsValidatorTests
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions
             {
-                CacheDurationSeconds = 300,
-                RankedPreferenceList = ["gpt-5-mini"]
+                CacheDurationSeconds = 300
             }
         };
 
@@ -38,8 +37,7 @@ public sealed class ApplicationOptionsValidatorTests
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions
             {
-                CacheDurationSeconds = 300,
-                RankedPreferenceList = ["gpt-5-mini"]
+                CacheDurationSeconds = 300
             }
         };
 
@@ -61,8 +59,7 @@ public sealed class ApplicationOptionsValidatorTests
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions
             {
-                CacheDurationSeconds = 300,
-                RankedPreferenceList = ["gpt-5-mini"]
+                CacheDurationSeconds = 300
             }
         };
 
@@ -91,8 +88,7 @@ public sealed class ApplicationOptionsValidatorTests
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions
             {
-                CacheDurationSeconds = 0,
-                RankedPreferenceList = []
+                CacheDurationSeconds = 0
             }
         };
 
@@ -100,7 +96,6 @@ public sealed class ApplicationOptionsValidatorTests
 
         result.Failed.Should().BeTrue();
         result.Failures.Should().Contain(failure => failure.Contains("CacheDurationSeconds"));
-        result.Failures.Should().Contain(failure => failure.Contains("RankedPreferenceList"));
     }
 
     [Fact]
@@ -117,8 +112,7 @@ public sealed class ApplicationOptionsValidatorTests
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions
             {
-                CacheDurationSeconds = 300,
-                RankedPreferenceList = ["gpt-5-mini"]
+                CacheDurationSeconds = 300
             }
         };
 

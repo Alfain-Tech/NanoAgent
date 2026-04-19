@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FinalAgent.Application.Abstractions;
+using FinalAgent.Application.Models;
 using FinalAgent.Domain.Models;
 
 namespace FinalAgent.Infrastructure.Storage;
@@ -13,7 +14,7 @@ internal sealed class JsonAgentConfigurationStore : IAgentConfigurationStore
         _pathProvider = pathProvider;
     }
 
-    public async Task<AgentProviderProfile?> LoadAsync(CancellationToken cancellationToken)
+    public async Task<AgentConfiguration?> LoadAsync(CancellationToken cancellationToken)
     {
         string filePath = _pathProvider.GetConfigurationFilePath();
         if (!File.Exists(filePath))
@@ -21,29 +22,29 @@ internal sealed class JsonAgentConfigurationStore : IAgentConfigurationStore
             return null;
         }
 
-        await using FileStream stream = File.OpenRead(filePath);
-        AgentProviderProfile? profile = await JsonSerializer.DeserializeAsync(
-            stream,
-            OnboardingStorageJsonContext.Default.AgentProviderProfile,
-            cancellationToken);
-
-        if (profile is null)
+        string json = await File.ReadAllTextAsync(filePath, cancellationToken);
+        if (string.IsNullOrWhiteSpace(json))
         {
             return null;
         }
 
-        return profile.ProviderKind switch
+        AgentConfiguration? configuration = TryDeserializeConfiguration(json);
+        if (configuration is not null)
         {
-            ProviderKind.OpenAi => new AgentProviderProfile(ProviderKind.OpenAi, BaseUrl: null),
-            ProviderKind.OpenAiCompatible when !string.IsNullOrWhiteSpace(profile.BaseUrl)
-                => new AgentProviderProfile(
-                    ProviderKind.OpenAiCompatible,
-                    profile.BaseUrl.Trim().TrimEnd('/')),
-            _ => null
-        };
+            return configuration;
+        }
+
+        AgentProviderProfile? legacyProfile = JsonSerializer.Deserialize(
+            json,
+            OnboardingStorageJsonContext.Default.AgentProviderProfile);
+
+        AgentProviderProfile? normalizedLegacyProfile = NormalizeProfile(legacyProfile);
+        return normalizedLegacyProfile is null
+            ? null
+            : new AgentConfiguration(normalizedLegacyProfile, null);
     }
 
-    public async Task SaveAsync(AgentProviderProfile configuration, CancellationToken cancellationToken)
+    public async Task SaveAsync(AgentConfiguration configuration, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
@@ -64,10 +65,65 @@ internal sealed class JsonAgentConfigurationStore : IAgentConfigurationStore
         await JsonSerializer.SerializeAsync(
             stream,
             configuration,
-            OnboardingStorageJsonContext.Default.AgentProviderProfile,
+            OnboardingStorageJsonContext.Default.AgentConfiguration,
             cancellationToken);
 
         await stream.FlushAsync(cancellationToken);
         FilePermissionHelper.EnsurePrivateFile(filePath);
+    }
+
+    private static AgentConfiguration? TryDeserializeConfiguration(string json)
+    {
+        try
+        {
+            AgentConfiguration? configuration = JsonSerializer.Deserialize(
+                json,
+                OnboardingStorageJsonContext.Default.AgentConfiguration);
+
+            if (configuration is null)
+            {
+                return null;
+            }
+
+            AgentProviderProfile? normalizedProfile = NormalizeProfile(configuration.ProviderProfile);
+            if (normalizedProfile is null)
+            {
+                return null;
+            }
+
+            return new AgentConfiguration(
+                normalizedProfile,
+                NormalizeModelId(configuration.PreferredModelId));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? NormalizeModelId(string? modelId)
+    {
+        string normalizedModelId = modelId?.Trim() ?? string.Empty;
+        return string.IsNullOrWhiteSpace(normalizedModelId)
+            ? null
+            : normalizedModelId;
+    }
+
+    private static AgentProviderProfile? NormalizeProfile(AgentProviderProfile? profile)
+    {
+        if (profile is null)
+        {
+            return null;
+        }
+
+        return profile.ProviderKind switch
+        {
+            ProviderKind.OpenAi => new AgentProviderProfile(ProviderKind.OpenAi, BaseUrl: null),
+            ProviderKind.OpenAiCompatible when !string.IsNullOrWhiteSpace(profile.BaseUrl)
+                => new AgentProviderProfile(
+                    ProviderKind.OpenAiCompatible,
+                    profile.BaseUrl.Trim().TrimEnd('/')),
+            _ => null
+        };
     }
 }

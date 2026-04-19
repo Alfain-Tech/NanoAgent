@@ -1,6 +1,3 @@
 namespace FinalAgent.Application.Models;
 
-public sealed record ModelSelectionSettings(
-    string? ConfiguredDefaultModel,
-    IReadOnlyList<string> RankedPreferenceList,
-    TimeSpan CacheDuration);
+public sealed record ModelSelectionSettings(TimeSpan CacheDuration);

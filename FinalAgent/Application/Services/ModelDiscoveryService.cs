@@ -40,9 +40,10 @@ internal sealed class ModelDiscoveryService : IModelDiscoveryService
 
     public async Task<ModelDiscoveryResult> DiscoverAndSelectAsync(CancellationToken cancellationToken)
     {
-        AgentProviderProfile providerProfile = await _configurationStore.LoadAsync(cancellationToken)
+        AgentConfiguration configuration = await _configurationStore.LoadAsync(cancellationToken)
             ?? throw new ModelDiscoveryException(
                 "Model discovery cannot start because provider configuration is missing.");
+        AgentProviderProfile providerProfile = configuration.ProviderProfile;
 
         string apiKey = await _secretStore.LoadAsync(cancellationToken)
             ?? throw new ModelDiscoveryException(
@@ -68,8 +69,7 @@ internal sealed class ModelDiscoveryService : IModelDiscoveryService
         ModelSelectionDecision selection = _modelSelectionPolicy.Select(
             new ModelSelectionContext(
                 models,
-                settings.ConfiguredDefaultModel,
-                settings.RankedPreferenceList));
+                configuration.PreferredModelId));
 
         if (selection.ConfiguredDefaultStatus == ConfiguredDefaultModelStatus.NotFound &&
             selection.ConfiguredDefaultModel is not null)
@@ -77,6 +77,18 @@ internal sealed class ModelDiscoveryService : IModelDiscoveryService
             ApplicationLogMessages.ConfiguredDefaultModelNotFound(
                 _logger,
                 selection.ConfiguredDefaultModel);
+        }
+
+        if (!string.Equals(
+                NormalizeModelId(configuration.PreferredModelId),
+                selection.SelectedModelId,
+                StringComparison.Ordinal))
+        {
+            await _configurationStore.SaveAsync(
+                new AgentConfiguration(
+                    providerProfile,
+                    selection.SelectedModelId),
+                cancellationToken);
         }
 
         return new ModelDiscoveryResult(
@@ -109,8 +121,7 @@ internal sealed class ModelDiscoveryService : IModelDiscoveryService
         HashSet<string> uniqueIds = new(StringComparer.Ordinal);
 
         foreach (AvailableModel model in cachedModels
-                     .Where(static model => !string.IsNullOrWhiteSpace(model.Id))
-                     .OrderBy(static model => model.Id, StringComparer.Ordinal))
+                     .Where(static model => !string.IsNullOrWhiteSpace(model.Id)))
         {
             string normalizedId = model.Id.Trim();
             if (!uniqueIds.Add(normalizedId))
@@ -136,5 +147,13 @@ internal sealed class ModelDiscoveryService : IModelDiscoveryService
         string rawKey = $"{providerProfile.ProviderKind}|{providerProfile.BaseUrl ?? "https://api.openai.com/v1"}|{apiKey}";
         byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawKey));
         return Convert.ToHexString(hashBytes);
+    }
+
+    private static string? NormalizeModelId(string? modelId)
+    {
+        string normalizedModelId = modelId?.Trim() ?? string.Empty;
+        return string.IsNullOrWhiteSpace(normalizedModelId)
+            ? null
+            : normalizedModelId;
     }
 }

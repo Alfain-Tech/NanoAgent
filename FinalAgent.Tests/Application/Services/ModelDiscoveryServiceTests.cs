@@ -20,7 +20,9 @@ public sealed class ModelDiscoveryServiceTests
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
         configurationStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AgentProviderProfile(ProviderKind.OpenAi, null));
+            .ReturnsAsync(new AgentConfiguration(
+                new AgentProviderProfile(ProviderKind.OpenAi, null),
+                "gpt-5"));
 
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
@@ -42,17 +44,14 @@ public sealed class ModelDiscoveryServiceTests
         Mock<IModelSelectionConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ModelSelectionSettings(
-                "gpt-5",
-                ["gpt-5-mini", "gpt-4.1"],
-                TimeSpan.FromMinutes(5)));
+            .Returns(new ModelSelectionSettings(TimeSpan.FromMinutes(5)));
 
         ModelDiscoveryService sut = CreateSut(
             configurationStore.Object,
             secretStore.Object,
             providerClient.Object,
             new InMemoryModelCache(),
-            new RankedModelSelectionPolicy(),
+            new ConfiguredOrFirstModelSelectionPolicy(),
             configurationAccessor.Object);
 
         ModelDiscoveryResult result = await sut.DiscoverAndSelectAsync(CancellationToken.None);
@@ -61,16 +60,26 @@ public sealed class ModelDiscoveryServiceTests
         result.SelectionSource.Should().Be(ModelSelectionSource.ConfiguredDefault);
         result.ConfiguredDefaultStatus.Should().Be(ConfiguredDefaultModelStatus.Matched);
         result.HadDuplicateModelIds.Should().BeTrue();
-        result.AvailableModels.Select(model => model.Id).Should().Equal("gpt-5", "gpt-5-mini");
+        result.AvailableModels.Select(model => model.Id).Should().Equal("gpt-5-mini", "gpt-5");
+        configurationStore.Verify(store => store.SaveAsync(It.IsAny<AgentConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task DiscoverAndSelectAsync_Should_UseRankedPreference_When_ConfiguredDefaultIsNotReturned()
+    public async Task DiscoverAndSelectAsync_Should_UseFirstReturnedModel_When_ConfiguredDefaultIsNotReturned()
     {
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
         configurationStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"));
+            .ReturnsAsync(new AgentConfiguration(
+                new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
+                "gpt-5"));
+        configurationStore
+            .Setup(store => store.SaveAsync(
+                new AgentConfiguration(
+                    new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
+                    "gpt-4.1"),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
@@ -91,23 +100,20 @@ public sealed class ModelDiscoveryServiceTests
         Mock<IModelSelectionConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ModelSelectionSettings(
-                "gpt-5",
-                ["gpt-4.1", "gpt-4.1-mini"],
-                TimeSpan.FromMinutes(5)));
+            .Returns(new ModelSelectionSettings(TimeSpan.FromMinutes(5)));
 
         ModelDiscoveryService sut = CreateSut(
             configurationStore.Object,
             secretStore.Object,
             providerClient.Object,
             new InMemoryModelCache(),
-            new RankedModelSelectionPolicy(),
+            new ConfiguredOrFirstModelSelectionPolicy(),
             configurationAccessor.Object);
 
         ModelDiscoveryResult result = await sut.DiscoverAndSelectAsync(CancellationToken.None);
 
         result.SelectedModelId.Should().Be("gpt-4.1");
-        result.SelectionSource.Should().Be(ModelSelectionSource.RankedPreference);
+        result.SelectionSource.Should().Be(ModelSelectionSource.FirstReturnedModel);
         result.ConfiguredDefaultStatus.Should().Be(ConfiguredDefaultModelStatus.NotFound);
         result.ConfiguredDefaultModel.Should().Be("gpt-5");
     }
@@ -120,7 +126,16 @@ public sealed class ModelDiscoveryServiceTests
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
         configurationStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AgentProviderProfile(ProviderKind.OpenAi, null));
+            .ReturnsAsync(new AgentConfiguration(
+                new AgentProviderProfile(ProviderKind.OpenAi, null),
+                null));
+        configurationStore
+            .Setup(store => store.SaveAsync(
+                new AgentConfiguration(
+                    new AgentProviderProfile(ProviderKind.OpenAi, null),
+                    "gpt-5-mini"),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
@@ -145,17 +160,14 @@ public sealed class ModelDiscoveryServiceTests
         Mock<IModelSelectionConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ModelSelectionSettings(
-                null,
-                ["gpt-5-mini"],
-                TimeSpan.FromMinutes(5)));
+            .Returns(new ModelSelectionSettings(TimeSpan.FromMinutes(5)));
 
         ModelDiscoveryService sut = CreateSut(
             configurationStore.Object,
             secretStore.Object,
             providerClient.Object,
             new InMemoryModelCache(),
-            new RankedModelSelectionPolicy(),
+            new ConfiguredOrFirstModelSelectionPolicy(),
             configurationAccessor.Object);
 
         await sut.DiscoverAndSelectAsync(CancellationToken.None);
@@ -170,7 +182,9 @@ public sealed class ModelDiscoveryServiceTests
         Mock<IAgentConfigurationStore> configurationStore = new(MockBehavior.Strict);
         configurationStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AgentProviderProfile(ProviderKind.OpenAi, null));
+            .ReturnsAsync(new AgentConfiguration(
+                new AgentProviderProfile(ProviderKind.OpenAi, null),
+                null));
 
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
@@ -191,17 +205,14 @@ public sealed class ModelDiscoveryServiceTests
         Mock<IModelSelectionConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ModelSelectionSettings(
-                null,
-                ["gpt-5-mini"],
-                TimeSpan.FromMinutes(5)));
+            .Returns(new ModelSelectionSettings(TimeSpan.FromMinutes(5)));
 
         ModelDiscoveryService sut = CreateSut(
             configurationStore.Object,
             secretStore.Object,
             providerClient.Object,
             new InMemoryModelCache(),
-            new RankedModelSelectionPolicy(),
+            new ConfiguredOrFirstModelSelectionPolicy(),
             configurationAccessor.Object);
 
         Func<Task> action = () => sut.DiscoverAndSelectAsync(CancellationToken.None);

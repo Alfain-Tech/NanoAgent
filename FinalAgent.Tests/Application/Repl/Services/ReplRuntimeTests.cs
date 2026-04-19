@@ -11,6 +11,7 @@ namespace FinalAgent.Tests.Application.Repl.Services;
 public sealed class ReplRuntimeTests
 {
     private static readonly ReplSessionContext Session = new(
+        "FinalAgent",
         new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
         "gpt-oss-20b",
         ["gpt-oss-20b", "qwen/qwen3-coder-30b"]);
@@ -54,7 +55,8 @@ public sealed class ReplRuntimeTests
         commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(helpCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
         commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(exitCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
         conversationPipeline.VerifyNoOtherCalls();
-        outputWriter.InfoMessages.Should().Contain(message => message.Contains("Shell ready."));
+        outputWriter.HeaderMessages.Should().ContainSingle()
+            .Which.Should().Be("FinalAgent|gpt-oss-20b");
         outputWriter.InfoMessages.Should().Contain("Available commands");
     }
 
@@ -323,6 +325,8 @@ public sealed class ReplRuntimeTests
     {
         public List<string> ErrorMessages { get; } = [];
 
+        public List<string> HeaderMessages { get; } = [];
+
         public List<string> InfoMessages { get; } = [];
 
         public List<string> Responses { get; } = [];
@@ -333,6 +337,16 @@ public sealed class ReplRuntimeTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             ErrorMessages.Add(message);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteShellHeaderAsync(
+            string applicationName,
+            string modelName,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            HeaderMessages.Add($"{applicationName}|{modelName}");
             return Task.CompletedTask;
         }
 

@@ -22,7 +22,6 @@ internal sealed class ConsoleStatusMessageWriter : IStatusMessageWriter
     public Task ShowInfoAsync(string message, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _renderer.WriteStatus(StatusMessageKind.Info, message);
         return Task.CompletedTask;
     }
 

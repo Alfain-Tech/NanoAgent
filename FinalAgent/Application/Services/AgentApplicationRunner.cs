@@ -44,6 +44,7 @@ internal sealed class AgentApplicationRunner : IApplicationRunner
 
         await _replRuntime.RunAsync(
             new ReplSessionContext(
+                _options.ProductName,
                 result.Profile,
                 modelResult.SelectedModelId,
                 modelResult.AvailableModels.Select(static model => model.Id).ToArray()),
