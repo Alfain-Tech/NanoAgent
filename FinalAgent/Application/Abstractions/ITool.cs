@@ -8,6 +8,8 @@ public interface ITool
 
     string Name { get; }
 
+    string PermissionRequirements { get; }
+
     string Schema { get; }
 
     Task<ToolResult> ExecuteAsync(

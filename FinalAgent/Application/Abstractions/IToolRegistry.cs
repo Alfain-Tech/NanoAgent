@@ -8,5 +8,5 @@ public interface IToolRegistry
 
     IReadOnlyList<string> GetRegisteredToolNames();
 
-    bool TryResolve(string toolName, out ITool? tool);
+    bool TryResolve(string toolName, out ToolRegistration? tool);
 }

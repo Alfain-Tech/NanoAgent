@@ -18,6 +18,19 @@ internal sealed class DirectoryListTool : ITool
 
     public string Name => AgentToolNames.DirectoryList;
 
+    public string PermissionRequirements => """
+        {
+          "approvalMode": "Automatic",
+          "filePaths": [
+            {
+              "argumentName": "path",
+              "kind": "List",
+              "allowedRoots": ["."]
+            }
+          ]
+        }
+        """;
+
     public string Schema => """
         {
           "type": "object",

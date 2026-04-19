@@ -19,6 +19,36 @@ internal sealed class ShellCommandTool : ITool
 
     public string Name => AgentToolNames.ShellCommand;
 
+    public string PermissionRequirements => """
+        {
+          "approvalMode": "Automatic",
+          "filePaths": [
+            {
+              "argumentName": "workingDirectory",
+              "kind": "List",
+              "allowedRoots": ["."]
+            }
+          ],
+          "shell": {
+            "commandArgumentName": "command",
+            "allowedCommands": [
+              "cat",
+              "dir",
+              "dotnet",
+              "Get-ChildItem",
+              "Get-Content",
+              "Get-Location",
+              "git",
+              "ls",
+              "pwd",
+              "rg",
+              "Select-String",
+              "which"
+            ]
+          }
+        }
+        """;
+
     public string Schema => """
         {
           "type": "object",

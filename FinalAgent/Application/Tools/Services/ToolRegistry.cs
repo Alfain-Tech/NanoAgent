@@ -7,13 +7,16 @@ namespace FinalAgent.Application.Tools.Services;
 internal sealed class ToolRegistry : IToolRegistry
 {
     private readonly IReadOnlyList<ToolDefinition> _toolDefinitions;
-    private readonly IReadOnlyDictionary<string, ITool> _tools;
+    private readonly IReadOnlyDictionary<string, ToolRegistration> _tools;
 
-    public ToolRegistry(IEnumerable<ITool> tools)
+    public ToolRegistry(
+        IEnumerable<ITool> tools,
+        IPermissionParser permissionParser)
     {
         ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(permissionParser);
 
-        Dictionary<string, ITool> toolMap = new(StringComparer.Ordinal);
+        Dictionary<string, ToolRegistration> toolMap = new(StringComparer.Ordinal);
         List<ToolDefinition> definitions = [];
 
         foreach (ITool tool in tools)
@@ -24,16 +27,22 @@ internal sealed class ToolRegistry : IToolRegistry
                     $"Tool '{tool.Name}' must provide a description.");
             }
 
-            if (!toolMap.TryAdd(tool.Name, tool))
+            ToolDefinition definition = new(
+                tool.Name,
+                tool.Description,
+                ParseSchema(tool));
+
+            ToolPermissionPolicy permissionPolicy = permissionParser.Parse(
+                tool.Name,
+                tool.PermissionRequirements);
+
+            if (!toolMap.TryAdd(tool.Name, new ToolRegistration(tool, definition, permissionPolicy)))
             {
                 throw new InvalidOperationException(
                     $"Duplicate tool registration detected for '{tool.Name}'.");
             }
 
-            definitions.Add(new ToolDefinition(
-                tool.Name,
-                tool.Description,
-                ParseSchema(tool)));
+            definitions.Add(definition);
         }
 
         _tools = toolMap;
@@ -54,7 +63,7 @@ internal sealed class ToolRegistry : IToolRegistry
             .ToArray();
     }
 
-    public bool TryResolve(string toolName, out ITool? tool)
+    public bool TryResolve(string toolName, out ToolRegistration? tool)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
 

@@ -18,6 +18,19 @@ internal sealed class FileWriteTool : ITool
 
     public string Name => AgentToolNames.FileWrite;
 
+    public string PermissionRequirements => """
+        {
+          "approvalMode": "Automatic",
+          "filePaths": [
+            {
+              "argumentName": "path",
+              "kind": "Write",
+              "allowedRoots": ["."]
+            }
+          ]
+        }
+        """;
+
     public string Schema => """
         {
           "type": "object",

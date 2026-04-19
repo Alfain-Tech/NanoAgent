@@ -34,6 +34,7 @@ public sealed class ToolInvocationResult
             ToolResultStatus.Success => $"Tool '{ToolName}' completed.",
             ToolResultStatus.NotFound => $"Tool '{ToolName}' was not found.",
             ToolResultStatus.InvalidArguments => $"Tool '{ToolName}' rejected the provided arguments.",
+            ToolResultStatus.PermissionDenied => $"Tool '{ToolName}' was denied by the permission policy.",
             _ => $"Tool '{ToolName}' failed."
         };
 

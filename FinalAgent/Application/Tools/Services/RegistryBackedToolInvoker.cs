@@ -8,13 +8,16 @@ namespace FinalAgent.Application.Tools.Services;
 internal sealed class RegistryBackedToolInvoker : IToolInvoker
 {
     private readonly TimeSpan _defaultTimeout;
+    private readonly IPermissionEvaluator _permissionEvaluator;
     private readonly IToolRegistry _toolRegistry;
 
     public RegistryBackedToolInvoker(
         IToolRegistry toolRegistry,
+        IPermissionEvaluator permissionEvaluator,
         TimeSpan? defaultTimeout = null)
     {
         _toolRegistry = toolRegistry;
+        _permissionEvaluator = permissionEvaluator;
         _defaultTimeout = defaultTimeout ?? TimeSpan.FromSeconds(30);
     }
 
@@ -27,7 +30,7 @@ internal sealed class RegistryBackedToolInvoker : IToolInvoker
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_toolRegistry.TryResolve(toolCall.Name, out ITool? tool) || tool is null)
+        if (!_toolRegistry.TryResolve(toolCall.Name, out ToolRegistration? registration) || registration is null)
         {
             return new ToolInvocationResult(
                 toolCall.Id,
@@ -71,17 +74,42 @@ internal sealed class RegistryBackedToolInvoker : IToolInvoker
                         exception.Message)));
         }
 
+        ToolExecutionContext executionContext = new(
+            toolCall.Id,
+            toolCall.Name,
+            arguments,
+            session);
+
+        PermissionEvaluationResult permissionResult = _permissionEvaluator.Evaluate(
+            registration.PermissionPolicy,
+            new PermissionEvaluationContext(executionContext));
+
+        if (!permissionResult.IsAllowed)
+        {
+            string reasonCode = permissionResult.ReasonCode!;
+            string reason = permissionResult.Reason!;
+            string title = permissionResult.Decision == PermissionEvaluationDecision.RequiresApproval
+                ? $"Approval required: {toolCall.Name}"
+                : $"Permission denied: {toolCall.Name}";
+
+            return new ToolInvocationResult(
+                toolCall.Id,
+                toolCall.Name,
+                ToolResultFactory.PermissionDenied(
+                    reasonCode,
+                    reason,
+                    new ToolRenderPayload(
+                        title,
+                        reason)));
+        }
+
         using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(_defaultTimeout);
 
         try
         {
-            ToolResult result = await tool.ExecuteAsync(
-                new ToolExecutionContext(
-                    toolCall.Id,
-                    toolCall.Name,
-                    arguments,
-                    session),
+            ToolResult result = await registration.Tool.ExecuteAsync(
+                executionContext,
                 timeoutSource.Token);
 
             return new ToolInvocationResult(toolCall.Id, toolCall.Name, result);

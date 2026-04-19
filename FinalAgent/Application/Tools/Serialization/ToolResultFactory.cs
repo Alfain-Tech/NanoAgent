@@ -39,6 +39,17 @@ internal static class ToolResultFactory
             renderPayload);
     }
 
+    public static ToolResult PermissionDenied(
+        string code,
+        string message,
+        ToolRenderPayload? renderPayload = null)
+    {
+        return ToolResult.PermissionDenied(
+            message,
+            Serialize(new ToolErrorPayload(code, message), ToolJsonContext.Default.ToolErrorPayload),
+            renderPayload);
+    }
+
     public static ToolResult Success<TPayload>(
         string message,
         TPayload payload,

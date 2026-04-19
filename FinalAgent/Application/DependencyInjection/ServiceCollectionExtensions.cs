@@ -1,5 +1,6 @@
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Conversation.Services;
+using FinalAgent.Application.Permissions;
 using FinalAgent.Application.Repl.Commands;
 using FinalAgent.Application.Repl.Parsing;
 using FinalAgent.Application.Repl.Services;
@@ -23,6 +24,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IReplCommandParser, ReplCommandParser>();
         services.AddSingleton<IReplCommandDispatcher, ReplCommandDispatcher>();
         services.AddSingleton<IConversationPipeline, AgentConversationPipeline>();
+        services.AddSingleton<IPermissionParser, ToolPermissionParser>();
+        services.AddSingleton<IPermissionEvaluator, ToolPermissionEvaluator>();
         services.AddSingleton<IToolRegistry, ToolRegistry>();
         services.AddSingleton<IToolInvoker, RegistryBackedToolInvoker>();
         services.AddSingleton<IToolExecutionPipeline, ToolExecutionPipeline>();

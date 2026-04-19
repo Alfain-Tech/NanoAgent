@@ -66,6 +66,18 @@ public sealed class ToolResult
             renderPayload);
     }
 
+    public static ToolResult PermissionDenied(
+        string message,
+        string jsonResult,
+        ToolRenderPayload? renderPayload = null)
+    {
+        return new ToolResult(
+            ToolResultStatus.PermissionDenied,
+            message,
+            jsonResult,
+            renderPayload);
+    }
+
     public static ToolResult Success(
         string message,
         string jsonResult,

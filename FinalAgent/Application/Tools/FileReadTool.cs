@@ -18,6 +18,19 @@ internal sealed class FileReadTool : ITool
 
     public string Name => AgentToolNames.FileRead;
 
+    public string PermissionRequirements => """
+        {
+          "approvalMode": "Automatic",
+          "filePaths": [
+            {
+              "argumentName": "path",
+              "kind": "Read",
+              "allowedRoots": ["."]
+            }
+          ]
+        }
+        """;
+
     public string Schema => """
         {
           "type": "object",

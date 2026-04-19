@@ -19,6 +19,19 @@ internal sealed class TextSearchTool : ITool
 
     public string Name => AgentToolNames.TextSearch;
 
+    public string PermissionRequirements => """
+        {
+          "approvalMode": "Automatic",
+          "filePaths": [
+            {
+              "argumentName": "path",
+              "kind": "Search",
+              "allowedRoots": ["."]
+            }
+          ]
+        }
+        """;
+
     public string Schema => """
         {
           "type": "object",
