@@ -1,10 +1,11 @@
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Conversation.Services;
-using FinalAgent.Application.Conversation.Tools;
 using FinalAgent.Application.Repl.Commands;
 using FinalAgent.Application.Repl.Parsing;
 using FinalAgent.Application.Repl.Services;
 using FinalAgent.Application.Services;
+using FinalAgent.Application.Tools;
+using FinalAgent.Application.Tools.Services;
 using FinalAgent.Domain.Abstractions;
 using FinalAgent.Domain.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,10 +23,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IReplCommandParser, ReplCommandParser>();
         services.AddSingleton<IReplCommandDispatcher, ReplCommandDispatcher>();
         services.AddSingleton<IConversationPipeline, AgentConversationPipeline>();
+        services.AddSingleton<IToolRegistry, ToolRegistry>();
+        services.AddSingleton<IToolInvoker, RegistryBackedToolInvoker>();
         services.AddSingleton<IToolExecutionPipeline, ToolExecutionPipeline>();
-        services.AddSingleton<IConversationToolHandler, ShowConfigConversationToolHandler>();
-        services.AddSingleton<IConversationToolHandler, ListModelsConversationToolHandler>();
-        services.AddSingleton<IConversationToolHandler, UseModelConversationToolHandler>();
+        services.AddSingleton<IAgentTool, ShowConfigTool>();
+        services.AddSingleton<IAgentTool, ListModelsTool>();
+        services.AddSingleton<IAgentTool, UseModelTool>();
         services.AddSingleton<IReplCommandHandler, ConfigCommandHandler>();
         services.AddSingleton<IReplCommandHandler, HelpCommandHandler>();
         services.AddSingleton<IReplCommandHandler, ModelsCommandHandler>();

@@ -100,7 +100,12 @@ public sealed class AgentConversationPipelineTests
                 It.Is<IReadOnlyList<ConversationToolCall>>(calls => calls.Count == 1 && calls[0].Name == "list_models"),
                 Session,
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ConversationTurnResult.ToolExecution("Available models:\n- gpt-5-mini (active)"));
+            .ReturnsAsync(new ToolExecutionBatchResult([
+                new ToolInvocationResult(
+                    "call_1",
+                    "list_models",
+                    ToolResult.Success("Available models:\n- gpt-5-mini (active)"))
+            ]));
 
         AgentConversationPipeline sut = CreateSut(
             secretStore.Object,
@@ -116,6 +121,9 @@ public sealed class AgentConversationPipelineTests
 
         result.Kind.Should().Be(ConversationTurnResultKind.ToolExecution);
         result.ResponseText.Should().Contain("Available models");
+        result.ToolExecutionResult.Should().NotBeNull();
+        result.ToolExecutionResult!.Results.Should().ContainSingle();
+        result.ToolExecutionResult.Results[0].ToolName.Should().Be("list_models");
     }
 
     [Fact]

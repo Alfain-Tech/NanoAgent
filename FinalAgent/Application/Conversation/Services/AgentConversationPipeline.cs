@@ -109,13 +109,13 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 _logger,
                 response.ToolCalls.Count);
 
-            ConversationTurnResult toolResult = await _toolExecutionPipeline.ExecuteAsync(
+            ToolExecutionBatchResult toolExecutionResult = await _toolExecutionPipeline.ExecuteAsync(
                 response.ToolCalls,
                 session,
                 cancellationToken);
 
             ApplicationLogMessages.ConversationToolHandoffCompleted(_logger);
-            return toolResult;
+            return ConversationTurnResult.ToolExecution(toolExecutionResult);
         }
 
         if (string.IsNullOrWhiteSpace(response.AssistantMessage))

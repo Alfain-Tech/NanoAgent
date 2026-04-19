@@ -4,7 +4,7 @@ namespace FinalAgent.Application.Abstractions;
 
 public interface IToolExecutionPipeline
 {
-    Task<ConversationTurnResult> ExecuteAsync(
+    Task<ToolExecutionBatchResult> ExecuteAsync(
         IReadOnlyList<ConversationToolCall> toolCalls,
         ReplSessionContext session,
         CancellationToken cancellationToken);

@@ -2,11 +2,9 @@ using FinalAgent.Application.Models;
 
 namespace FinalAgent.Application.Abstractions;
 
-public interface IConversationToolHandler
+public interface IToolInvoker
 {
-    string ToolName { get; }
-
-    Task<string> ExecuteAsync(
+    Task<ToolInvocationResult> InvokeAsync(
         ConversationToolCall toolCall,
         ReplSessionContext session,
         CancellationToken cancellationToken);

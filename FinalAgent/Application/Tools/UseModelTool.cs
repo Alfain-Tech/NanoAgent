@@ -2,46 +2,62 @@ using System.Text.Json;
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Models;
 
-namespace FinalAgent.Application.Conversation.Tools;
+namespace FinalAgent.Application.Tools;
 
-internal sealed class UseModelConversationToolHandler : IConversationToolHandler
+internal sealed class UseModelTool : IAgentTool
 {
     private readonly IModelActivationService _modelActivationService;
 
-    public UseModelConversationToolHandler(IModelActivationService modelActivationService)
+    public UseModelTool(IModelActivationService modelActivationService)
     {
         _modelActivationService = modelActivationService;
     }
 
-    public string ToolName => ConversationToolNames.UseModel;
+    public string Name => AgentToolNames.UseModel;
 
-    public Task<string> ExecuteAsync(
-        ConversationToolCall toolCall,
-        ReplSessionContext session,
+    public Task<ToolResult> ExecuteAsync(
+        ToolExecutionContext context,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(toolCall);
-        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string? requestedModel = TryReadRequestedModel(toolCall.ArgumentsJson);
-        if (string.IsNullOrWhiteSpace(requestedModel))
+        string? requestedModel;
+
+        try
         {
-            return Task.FromResult(
-                "Tool 'use_model' requires a 'model' or 'modelId' string argument.");
+            requestedModel = TryReadRequestedModel(context.ArgumentsJson);
+        }
+        catch (JsonException)
+        {
+            return Task.FromResult(ToolResult.InvalidArguments(
+                "Tool 'use_model' received invalid JSON arguments."));
         }
 
-        ModelActivationResult result = _modelActivationService.Resolve(session, requestedModel);
+        if (string.IsNullOrWhiteSpace(requestedModel))
+        {
+            return Task.FromResult(ToolResult.InvalidArguments(
+                "Tool 'use_model' requires a 'model' or 'modelId' string argument."));
+        }
+
+        ModelActivationResult result = _modelActivationService.Resolve(
+            context.Session,
+            requestedModel);
+
         return Task.FromResult(result.Status switch
         {
             ModelActivationStatus.Switched =>
-                $"Active model switched to '{result.ResolvedModelId}'.",
+                ToolResult.Success(
+                    $"Active model switched to '{result.ResolvedModelId}'."),
             ModelActivationStatus.AlreadyActive =>
-                $"Already using '{result.ResolvedModelId}'.",
+                ToolResult.Success(
+                    $"Already using '{result.ResolvedModelId}'."),
             ModelActivationStatus.Ambiguous =>
-                "Model name is ambiguous. Matches: " + string.Join(", ", result.CandidateModelIds),
+                ToolResult.InvalidArguments(
+                    "Model name is ambiguous. Matches: " + string.Join(", ", result.CandidateModelIds)),
             _ =>
-                $"Model '{requestedModel.Trim()}' is not available in the current session."
+                ToolResult.InvalidArguments(
+                    $"Model '{requestedModel.Trim()}' is not available in the current session.")
         });
     }
 
