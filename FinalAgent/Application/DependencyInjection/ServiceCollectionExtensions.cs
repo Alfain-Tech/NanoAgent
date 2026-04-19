@@ -1,5 +1,6 @@
 using FinalAgent.Application.Abstractions;
 using FinalAgent.Application.Repl.Commands;
+using FinalAgent.Application.Repl.Parsing;
 using FinalAgent.Application.Repl.Services;
 using FinalAgent.Application.Services;
 using FinalAgent.Domain.Abstractions;
@@ -16,9 +17,13 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IApplicationRunner, AgentApplicationRunner>();
         services.AddSingleton<IReplRuntime, ReplRuntime>();
+        services.AddSingleton<IReplCommandParser, ReplCommandParser>();
         services.AddSingleton<IReplCommandDispatcher, ReplCommandDispatcher>();
         services.AddSingleton<IConversationPipeline, AgentConversationPipeline>();
+        services.AddSingleton<IReplCommandHandler, ConfigCommandHandler>();
         services.AddSingleton<IReplCommandHandler, HelpCommandHandler>();
+        services.AddSingleton<IReplCommandHandler, ModelsCommandHandler>();
+        services.AddSingleton<IReplCommandHandler, UseModelCommandHandler>();
         services.AddSingleton<IReplCommandHandler, ExitCommandHandler>();
         services.AddSingleton<IModelDiscoveryService, ModelDiscoveryService>();
         services.AddSingleton<IFirstRunOnboardingService, FirstRunOnboardingService>();

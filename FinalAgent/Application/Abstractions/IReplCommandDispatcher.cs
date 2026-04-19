@@ -5,7 +5,7 @@ namespace FinalAgent.Application.Abstractions;
 public interface IReplCommandDispatcher
 {
     Task<ReplCommandResult> DispatchAsync(
-        string commandText,
+        ParsedReplCommand command,
         ReplSessionContext session,
         CancellationToken cancellationToken);
 }

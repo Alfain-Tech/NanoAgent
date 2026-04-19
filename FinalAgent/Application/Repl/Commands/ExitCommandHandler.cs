@@ -9,6 +9,8 @@ internal sealed class ExitCommandHandler : IReplCommandHandler
 
     public string Description => "Exit the interactive shell.";
 
+    public string Usage => "/exit";
+
     public Task<ReplCommandResult> ExecuteAsync(
         ReplCommandContext context,
         CancellationToken cancellationToken)

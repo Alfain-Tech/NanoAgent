@@ -12,18 +12,29 @@ public sealed class ReplRuntimeTests
 {
     private static readonly ReplSessionContext Session = new(
         new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
-        "gpt-oss-20b");
+        "gpt-oss-20b",
+        ["gpt-oss-20b", "qwen/qwen3-coder-30b"]);
 
     [Fact]
     public async Task RunAsync_Should_DispatchSlashCommand_When_InputStartsWithSlash()
     {
         QueueReplInputReader inputReader = new("/help", "/exit");
         RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand helpCommand = new("/help", "help", string.Empty, []);
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser
+            .Setup(parser => parser.Parse("/help"))
+            .Returns(helpCommand);
+        commandParser
+            .Setup(parser => parser.Parse("/exit"))
+            .Returns(exitCommand);
 
         Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
         commandDispatcher
             .SetupSequence(dispatcher => dispatcher.DispatchAsync(
-                It.IsAny<string>(),
+                It.IsAny<ParsedReplCommand>(),
                 Session,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(ReplCommandResult.Continue("Available commands"))
@@ -34,27 +45,42 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object);
 
         await sut.RunAsync(Session, CancellationToken.None);
 
-        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync("/help", Session, It.IsAny<CancellationToken>()), Times.Once);
-        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync("/exit", Session, It.IsAny<CancellationToken>()), Times.Once);
+        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(helpCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
+        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(exitCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
         conversationPipeline.VerifyNoOtherCalls();
         outputWriter.InfoMessages.Should().Contain(message => message.Contains("Shell ready."));
         outputWriter.InfoMessages.Should().Contain("Available commands");
     }
 
     [Fact]
-    public async Task RunAsync_Should_IgnoreWhitespaceOnlyInput_When_LineContainsNoContent()
+    public async Task RunAsync_Should_DispatchSlashCommand_When_FirstRedirectedLineContainsUtf8Bom()
     {
-        QueueReplInputReader inputReader = new("   ", "/exit");
+        QueueReplInputReader inputReader = new("\uFEFF/help", "/exit");
         RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand helpCommand = new("/help", "help", string.Empty, []);
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser
+            .Setup(parser => parser.Parse("/help"))
+            .Returns(helpCommand);
+        commandParser
+            .Setup(parser => parser.Parse("/exit"))
+            .Returns(exitCommand);
 
         Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
         commandDispatcher
-            .Setup(dispatcher => dispatcher.DispatchAsync("/exit", Session, It.IsAny<CancellationToken>()))
+            .SetupSequence(dispatcher => dispatcher.DispatchAsync(
+                It.IsAny<ParsedReplCommand>(),
+                Session,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReplCommandResult.Continue("Available commands"))
             .ReturnsAsync(ReplCommandResult.Exit());
 
         Mock<IConversationPipeline> conversationPipeline = new(MockBehavior.Strict);
@@ -62,12 +88,85 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object);
 
         await sut.RunAsync(Session, CancellationToken.None);
 
-        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync("/exit", Session, It.IsAny<CancellationToken>()), Times.Once);
+        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(helpCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
+        conversationPipeline.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RunAsync_Should_DispatchSlashCommand_When_FirstRedirectedLineContainsUtf8BomMojibakePrefix()
+    {
+        QueueReplInputReader inputReader = new("\u00EF\u00BB\u00BF/help", "/exit");
+        RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand helpCommand = new("/help", "help", string.Empty, []);
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser
+            .Setup(parser => parser.Parse("/help"))
+            .Returns(helpCommand);
+        commandParser
+            .Setup(parser => parser.Parse("/exit"))
+            .Returns(exitCommand);
+
+        Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
+        commandDispatcher
+            .SetupSequence(dispatcher => dispatcher.DispatchAsync(
+                It.IsAny<ParsedReplCommand>(),
+                Session,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReplCommandResult.Continue("Available commands"))
+            .ReturnsAsync(ReplCommandResult.Exit());
+
+        Mock<IConversationPipeline> conversationPipeline = new(MockBehavior.Strict);
+
+        ReplRuntime sut = CreateSut(
+            inputReader,
+            outputWriter,
+            commandParser.Object,
+            commandDispatcher.Object,
+            conversationPipeline.Object);
+
+        await sut.RunAsync(Session, CancellationToken.None);
+
+        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(helpCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
+        conversationPipeline.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RunAsync_Should_IgnoreWhitespaceOnlyInput_When_LineContainsNoContent()
+    {
+        QueueReplInputReader inputReader = new("   ", "/exit");
+        RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser
+            .Setup(parser => parser.Parse("/exit"))
+            .Returns(exitCommand);
+
+        Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
+        commandDispatcher
+            .Setup(dispatcher => dispatcher.DispatchAsync(exitCommand, Session, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReplCommandResult.Exit());
+
+        Mock<IConversationPipeline> conversationPipeline = new(MockBehavior.Strict);
+
+        ReplRuntime sut = CreateSut(
+            inputReader,
+            outputWriter,
+            commandParser.Object,
+            commandDispatcher.Object,
+            conversationPipeline.Object);
+
+        await sut.RunAsync(Session, CancellationToken.None);
+
+        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(exitCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
         conversationPipeline.VerifyNoOtherCalls();
     }
 
@@ -76,10 +175,16 @@ public sealed class ReplRuntimeTests
     {
         QueueReplInputReader inputReader = new("help me plan this change", "/exit");
         RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser
+            .Setup(parser => parser.Parse("/exit"))
+            .Returns(exitCommand);
 
         Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
         commandDispatcher
-            .Setup(dispatcher => dispatcher.DispatchAsync("/exit", Session, It.IsAny<CancellationToken>()))
+            .Setup(dispatcher => dispatcher.DispatchAsync(exitCommand, Session, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ReplCommandResult.Exit());
 
         Mock<IConversationPipeline> conversationPipeline = new(MockBehavior.Strict);
@@ -93,6 +198,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object);
 
@@ -110,11 +216,21 @@ public sealed class ReplRuntimeTests
     {
         QueueReplInputReader inputReader = new("/help", "/exit");
         RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand helpCommand = new("/help", "help", string.Empty, []);
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser
+            .Setup(parser => parser.Parse("/help"))
+            .Returns(helpCommand);
+        commandParser
+            .Setup(parser => parser.Parse("/exit"))
+            .Returns(exitCommand);
 
         Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
         commandDispatcher
             .SetupSequence(dispatcher => dispatcher.DispatchAsync(
-                It.IsAny<string>(),
+                It.IsAny<ParsedReplCommand>(),
                 Session,
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("boom"))
@@ -125,6 +241,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object);
 
@@ -139,10 +256,16 @@ public sealed class ReplRuntimeTests
     {
         QueueReplInputReader inputReader = new("hello", "/exit");
         RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser
+            .Setup(parser => parser.Parse("/exit"))
+            .Returns(exitCommand);
 
         Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
         commandDispatcher
-            .Setup(dispatcher => dispatcher.DispatchAsync("/exit", Session, It.IsAny<CancellationToken>()))
+            .Setup(dispatcher => dispatcher.DispatchAsync(exitCommand, Session, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ReplCommandResult.Exit());
 
         Mock<IConversationPipeline> conversationPipeline = new(MockBehavior.Strict);
@@ -153,6 +276,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object);
 
@@ -160,18 +284,20 @@ public sealed class ReplRuntimeTests
 
         outputWriter.ErrorMessages.Should().ContainSingle(message =>
             message.Contains("conversation pipeline failed unexpectedly", StringComparison.OrdinalIgnoreCase));
-        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync("/exit", Session, It.IsAny<CancellationToken>()), Times.Once);
+        commandDispatcher.Verify(dispatcher => dispatcher.DispatchAsync(exitCommand, Session, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static ReplRuntime CreateSut(
         IReplInputReader inputReader,
         IReplOutputWriter outputWriter,
+        IReplCommandParser commandParser,
         IReplCommandDispatcher commandDispatcher,
         IConversationPipeline conversationPipeline)
     {
         return new ReplRuntime(
             inputReader,
             outputWriter,
+            commandParser,
             commandDispatcher,
             conversationPipeline,
             NullLogger<ReplRuntime>.Instance);

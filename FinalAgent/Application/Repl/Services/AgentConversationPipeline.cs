@@ -15,7 +15,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         cancellationToken.ThrowIfCancellationRequested();
 
         string response =
-            $"Conversation pipeline received your request for model '{session.SelectedModelId}' " +
+            $"Conversation pipeline received your request for model '{session.ActiveModelId}' " +
             $"on provider '{session.ProviderName}'. LLM request execution is the next layer to plug in.";
 
         return Task.FromResult(new ConversationTurnResult(response));

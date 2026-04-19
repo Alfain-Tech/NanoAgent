@@ -45,7 +45,8 @@ internal sealed class AgentApplicationRunner : IApplicationRunner
         await _replRuntime.RunAsync(
             new ReplSessionContext(
                 result.Profile,
-                modelResult.SelectedModelId),
+                modelResult.SelectedModelId,
+                modelResult.AvailableModels.Select(static model => model.Id).ToArray()),
             cancellationToken);
 
         ApplicationLogMessages.RunnerCompleted(

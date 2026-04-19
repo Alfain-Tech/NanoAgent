@@ -17,55 +17,34 @@ internal sealed class ReplCommandDispatcher : IReplCommandDispatcher
     }
 
     public Task<ReplCommandResult> DispatchAsync(
-        string commandText,
+        ParsedReplCommand command,
         ReplSessionContext session,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commandText);
+        ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string trimmedInput = commandText.Trim();
-        if (!trimmedInput.StartsWith("/", StringComparison.Ordinal))
-        {
-            throw new ArgumentException("REPL commands must start with '/'.", nameof(commandText));
-        }
-
-        string commandBody = trimmedInput[1..].Trim();
-        if (string.IsNullOrWhiteSpace(commandBody))
+        if (string.IsNullOrWhiteSpace(command.CommandName))
         {
             return Task.FromResult(ReplCommandResult.Continue(
                 "Command name cannot be empty. Type /help to see the available commands.",
                 ReplFeedbackKind.Error));
         }
 
-        string commandName;
-        string arguments;
-
-        int firstSpaceIndex = commandBody.IndexOf(' ');
-        if (firstSpaceIndex < 0)
-        {
-            commandName = commandBody;
-            arguments = string.Empty;
-        }
-        else
-        {
-            commandName = commandBody[..firstSpaceIndex];
-            arguments = commandBody[(firstSpaceIndex + 1)..].Trim();
-        }
-
-        if (!_commandHandlers.TryGetValue(commandName, out IReplCommandHandler? handler))
+        if (!_commandHandlers.TryGetValue(command.CommandName, out IReplCommandHandler? handler))
         {
             return Task.FromResult(ReplCommandResult.Continue(
-                $"Unknown command '/{commandName}'. Type /help to see the available commands.",
+                $"Unknown command '/{command.CommandName}'. Type /help to see the available commands.",
                 ReplFeedbackKind.Error));
         }
 
         return handler.ExecuteAsync(
             new ReplCommandContext(
-                commandName,
-                arguments,
-                trimmedInput,
+                command.CommandName,
+                command.ArgumentText,
+                command.Arguments,
+                command.RawText,
                 session),
             cancellationToken);
     }

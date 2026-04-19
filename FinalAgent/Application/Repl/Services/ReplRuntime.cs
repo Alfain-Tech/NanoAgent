@@ -7,8 +7,11 @@ namespace FinalAgent.Application.Repl.Services;
 
 internal sealed class ReplRuntime : IReplRuntime
 {
+    private const string Utf8BomMojibakePrefix = "\u00EF\u00BB\u00BF";
+
     private readonly IReplInputReader _inputReader;
     private readonly IReplOutputWriter _outputWriter;
+    private readonly IReplCommandParser _commandParser;
     private readonly IReplCommandDispatcher _commandDispatcher;
     private readonly IConversationPipeline _conversationPipeline;
     private readonly ILogger<ReplRuntime> _logger;
@@ -16,12 +19,14 @@ internal sealed class ReplRuntime : IReplRuntime
     public ReplRuntime(
         IReplInputReader inputReader,
         IReplOutputWriter outputWriter,
+        IReplCommandParser commandParser,
         IReplCommandDispatcher commandDispatcher,
         IConversationPipeline conversationPipeline,
         ILogger<ReplRuntime> logger)
     {
         _inputReader = inputReader;
         _outputWriter = outputWriter;
+        _commandParser = commandParser;
         _commandDispatcher = commandDispatcher;
         _conversationPipeline = conversationPipeline;
         _logger = logger;
@@ -31,10 +36,10 @@ internal sealed class ReplRuntime : IReplRuntime
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        ApplicationLogMessages.ReplStarted(_logger, session.SelectedModelId);
+        ApplicationLogMessages.ReplStarted(_logger, session.ActiveModelId);
 
         await _outputWriter.WriteInfoAsync(
-            $"Shell ready. Provider: {session.ProviderName}. Model: {session.SelectedModelId}. Type /help for commands.",
+            $"Shell ready. Provider: {session.ProviderName}. Model: {session.ActiveModelId}. Type /help for commands.",
             cancellationToken);
 
         while (true)
@@ -48,7 +53,7 @@ internal sealed class ReplRuntime : IReplRuntime
                 break;
             }
 
-            string input = rawInput.Trim();
+            string input = NormalizeInput(rawInput);
             if (input.Length == 0)
             {
                 continue;
@@ -60,8 +65,10 @@ internal sealed class ReplRuntime : IReplRuntime
 
                 try
                 {
+                    ParsedReplCommand parsedCommand = _commandParser.Parse(input);
+
                     commandResult = await _commandDispatcher.DispatchAsync(
-                        input,
+                        parsedCommand,
                         session,
                         cancellationToken);
                 }
@@ -131,5 +138,19 @@ internal sealed class ReplRuntime : IReplRuntime
         return commandResult.FeedbackKind == ReplFeedbackKind.Error
             ? _outputWriter.WriteErrorAsync(commandResult.Message, cancellationToken)
             : _outputWriter.WriteInfoAsync(commandResult.Message, cancellationToken);
+    }
+
+    private static string NormalizeInput(string rawInput)
+    {
+        ArgumentNullException.ThrowIfNull(rawInput);
+
+        string normalizedInput = rawInput.Trim();
+
+        if (normalizedInput.StartsWith(Utf8BomMojibakePrefix, StringComparison.Ordinal))
+        {
+            normalizedInput = normalizedInput[Utf8BomMojibakePrefix.Length..];
+        }
+
+        return normalizedInput.TrimStart('\uFEFF');
     }
 }

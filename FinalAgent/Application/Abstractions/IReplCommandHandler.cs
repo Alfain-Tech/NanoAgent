@@ -8,6 +8,8 @@ public interface IReplCommandHandler
 
     string Description { get; }
 
+    string Usage { get; }
+
     Task<ReplCommandResult> ExecuteAsync(
         ReplCommandContext context,
         CancellationToken cancellationToken);

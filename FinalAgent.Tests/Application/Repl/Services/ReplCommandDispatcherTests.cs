@@ -11,7 +11,8 @@ public sealed class ReplCommandDispatcherTests
 {
     private static readonly ReplSessionContext Session = new(
         new AgentProviderProfile(ProviderKind.OpenAi, null),
-        "gpt-5-mini");
+        "gpt-5-mini",
+        ["gpt-5-mini", "gpt-4.1"]);
 
     [Fact]
     public async Task DispatchAsync_Should_ReturnExitRequested_When_ExitCommandIsHandled()
@@ -21,7 +22,10 @@ public sealed class ReplCommandDispatcherTests
             new HelpCommandHandler()
         ]);
 
-        ReplCommandResult result = await sut.DispatchAsync("/exit", Session, CancellationToken.None);
+        ReplCommandResult result = await sut.DispatchAsync(
+            new ParsedReplCommand("/exit", "exit", string.Empty, []),
+            Session,
+            CancellationToken.None);
 
         result.ExitRequested.Should().BeTrue();
         result.Message.Should().Be("Exiting FinalAgent.");
@@ -34,7 +38,10 @@ public sealed class ReplCommandDispatcherTests
             new ExitCommandHandler()
         ]);
 
-        ReplCommandResult result = await sut.DispatchAsync("/unknown", Session, CancellationToken.None);
+        ReplCommandResult result = await sut.DispatchAsync(
+            new ParsedReplCommand("/unknown", "unknown", string.Empty, []),
+            Session,
+            CancellationToken.None);
 
         result.ExitRequested.Should().BeFalse();
         result.FeedbackKind.Should().Be(ReplFeedbackKind.Error);
@@ -47,12 +54,16 @@ public sealed class ReplCommandDispatcherTests
         CapturingCommandHandler handler = new();
         ReplCommandDispatcher sut = new([handler]);
 
-        ReplCommandResult result = await sut.DispatchAsync("/echo hello world", Session, CancellationToken.None);
+        ReplCommandResult result = await sut.DispatchAsync(
+            new ParsedReplCommand("/echo hello world", "echo", "hello world", ["hello", "world"]),
+            Session,
+            CancellationToken.None);
 
         result.Should().Be(ReplCommandResult.Continue("handled"));
         handler.LastContext.Should().NotBeNull();
         handler.LastContext!.CommandName.Should().Be("echo");
-        handler.LastContext.Arguments.Should().Be("hello world");
+        handler.LastContext.ArgumentText.Should().Be("hello world");
+        handler.LastContext.Arguments.Should().Equal("hello", "world");
         handler.LastContext.RawText.Should().Be("/echo hello world");
     }
 
@@ -61,6 +72,8 @@ public sealed class ReplCommandDispatcherTests
         public string CommandName => "echo";
 
         public string Description => "Capture arguments.";
+
+        public string Usage => "/echo <text>";
 
         public ReplCommandContext? LastContext { get; private set; }
 

@@ -7,7 +7,9 @@ internal sealed class HelpCommandHandler : IReplCommandHandler
 {
     public string CommandName => "help";
 
-    public string Description => "Show the available shell commands.";
+    public string Description => "List the available shell commands and their usage.";
+
+    public string Usage => "/help";
 
     public Task<ReplCommandResult> ExecuteAsync(
         ReplCommandContext context,
@@ -17,8 +19,11 @@ internal sealed class HelpCommandHandler : IReplCommandHandler
 
         const string HelpText =
             "Available commands:\n" +
-            "/help - Show the available shell commands.\n" +
-            "/exit - Exit the interactive shell.";
+            "/config - Show the current provider, config path, and active model.\n" +
+            "/exit - Exit the interactive shell.\n" +
+            "/help - List the available shell commands and their usage.\n" +
+            "/models - Show the available models in the current session.\n" +
+            "/use <model> - Switch the active model for subsequent prompts.";
 
         return Task.FromResult(ReplCommandResult.Continue(HelpText));
     }
