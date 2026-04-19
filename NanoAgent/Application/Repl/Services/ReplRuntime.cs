@@ -14,6 +14,7 @@ internal sealed class ReplRuntime : IReplRuntime
     private readonly IReplCommandParser _commandParser;
     private readonly IReplCommandDispatcher _commandDispatcher;
     private readonly IConversationPipeline _conversationPipeline;
+    private readonly ITokenEstimator _tokenEstimator;
     private readonly ILogger<ReplRuntime> _logger;
 
     public ReplRuntime(
@@ -22,6 +23,7 @@ internal sealed class ReplRuntime : IReplRuntime
         IReplCommandParser commandParser,
         IReplCommandDispatcher commandDispatcher,
         IConversationPipeline conversationPipeline,
+        ITokenEstimator tokenEstimator,
         ILogger<ReplRuntime> logger)
     {
         _inputReader = inputReader;
@@ -29,6 +31,7 @@ internal sealed class ReplRuntime : IReplRuntime
         _commandParser = commandParser;
         _commandDispatcher = commandDispatcher;
         _conversationPipeline = conversationPipeline;
+        _tokenEstimator = tokenEstimator;
         _logger = logger;
     }
 
@@ -100,14 +103,32 @@ internal sealed class ReplRuntime : IReplRuntime
 
             try
             {
-                ConversationTurnResult response = await _conversationPipeline.ProcessAsync(
-                    input,
-                    session,
-                    cancellationToken);
+                int estimatedInputTokens = _tokenEstimator.Estimate(input);
+                ConversationTurnResult response;
+                await using (IAsyncDisposable progress = await _outputWriter.BeginResponseProgressAsync(
+                                 estimatedInputTokens,
+                                 session.TotalEstimatedOutputTokens,
+                                 cancellationToken))
+                {
+                    response = await _conversationPipeline.ProcessAsync(
+                        input,
+                        session,
+                        cancellationToken);
+                }
 
                 if (!string.IsNullOrWhiteSpace(response.ResponseText))
                 {
-                    await _outputWriter.WriteResponseAsync(response.ResponseText, cancellationToken);
+                    ConversationTurnMetrics? metrics = response.Metrics;
+                    if (metrics is not null)
+                    {
+                        int sessionTotal = session.AddEstimatedOutputTokens(metrics.EstimatedOutputTokens);
+                        metrics = metrics.WithSessionEstimatedOutputTokens(sessionTotal);
+                    }
+
+                    await _outputWriter.WriteResponseAsync(
+                        response.ResponseText,
+                        metrics,
+                        cancellationToken);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

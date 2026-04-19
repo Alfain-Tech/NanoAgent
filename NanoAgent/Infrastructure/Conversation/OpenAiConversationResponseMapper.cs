@@ -63,6 +63,7 @@ internal sealed class OpenAiConversationResponseMapper : IConversationResponseMa
         return new ConversationResponse(
             assistantMessage,
             toolCalls,
-            response?.Id ?? payload.ResponseId);
+            response?.Id ?? payload.ResponseId,
+            response?.Usage?.CompletionTokens);
     }
 }

@@ -3,6 +3,7 @@ using NanoAgent.Application.Abstractions;
 using NanoAgent.Application.Conversation.Services;
 using NanoAgent.Application.Exceptions;
 using NanoAgent.Application.Models;
+using NanoAgent.Application.Services;
 using NanoAgent.Application.Tools.Serialization;
 using NanoAgent.Domain.Models;
 using FluentAssertions;
@@ -58,6 +59,8 @@ public sealed class AgentConversationPipelineTests
         Mock<IToolExecutionPipeline> toolExecutionPipeline = new(MockBehavior.Strict);
 
         AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
             secretStore.Object,
             providerClient.Object,
             responseMapper.Object,
@@ -72,6 +75,8 @@ public sealed class AgentConversationPipelineTests
 
         result.Kind.Should().Be(ConversationTurnResultKind.AssistantMessage);
         result.ResponseText.Should().Be("Ready to help.");
+        result.Metrics.Should().NotBeNull();
+        result.Metrics!.EstimatedOutputTokens.Should().BeGreaterThan(0);
         toolExecutionPipeline.VerifyNoOtherCalls();
     }
 
@@ -131,6 +136,8 @@ public sealed class AgentConversationPipelineTests
             ]));
 
         AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
             secretStore.Object,
             providerClient.Object,
             responseMapper.Object,
@@ -146,6 +153,7 @@ public sealed class AgentConversationPipelineTests
         result.Kind.Should().Be(ConversationTurnResultKind.ToolExecution);
         result.ResponseText.Should().Contain("Directory listing");
         result.ToolExecutionResult.Should().NotBeNull();
+        result.Metrics.Should().NotBeNull();
         result.ToolExecutionResult!.Results.Should().ContainSingle();
         result.ToolExecutionResult.Results[0].ToolName.Should().Be("directory_list");
     }
@@ -159,6 +167,8 @@ public sealed class AgentConversationPipelineTests
             .ReturnsAsync((string?)null);
 
         AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
             secretStore.Object,
             Mock.Of<IConversationProviderClient>(),
             Mock.Of<IConversationResponseMapper>(),
@@ -200,6 +210,8 @@ public sealed class AgentConversationPipelineTests
             .ThrowsAsync(new ConversationProviderException("Provider unavailable."));
 
         AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
             secretStore.Object,
             providerClient.Object,
             Mock.Of<IConversationResponseMapper>(),
@@ -214,6 +226,8 @@ public sealed class AgentConversationPipelineTests
     }
 
     private static AgentConversationPipeline CreateSut(
+        TimeProvider timeProvider,
+        ITokenEstimator tokenEstimator,
         IApiKeySecretStore secretStore,
         IConversationProviderClient providerClient,
         IConversationResponseMapper responseMapper,
@@ -222,6 +236,8 @@ public sealed class AgentConversationPipelineTests
         IConversationConfigurationAccessor configurationAccessor)
     {
         return new AgentConversationPipeline(
+            timeProvider,
+            tokenEstimator,
             secretStore,
             providerClient,
             responseMapper,

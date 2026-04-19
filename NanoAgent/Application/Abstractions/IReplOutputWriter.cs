@@ -1,7 +1,14 @@
+using NanoAgent.Application.Models;
+
 namespace NanoAgent.Application.Abstractions;
 
 public interface IReplOutputWriter
 {
+    ValueTask<IAsyncDisposable> BeginResponseProgressAsync(
+        int estimatedOutputTokens,
+        int completedSessionEstimatedOutputTokens,
+        CancellationToken cancellationToken);
+
     Task WriteShellHeaderAsync(
         string applicationName,
         string modelName,
@@ -13,5 +20,8 @@ public interface IReplOutputWriter
 
     Task WriteWarningAsync(string message, CancellationToken cancellationToken);
 
-    Task WriteResponseAsync(string message, CancellationToken cancellationToken);
+    Task WriteResponseAsync(
+        string message,
+        ConversationTurnMetrics? metrics,
+        CancellationToken cancellationToken);
 }

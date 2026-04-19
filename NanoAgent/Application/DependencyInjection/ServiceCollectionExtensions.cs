@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFirstRunOnboardingService, FirstRunOnboardingService>();
         services.AddSingleton<IOnboardingInputValidator, OnboardingInputValidator>();
         services.AddSingleton<IModelActivationService, ModelActivationService>();
+        services.AddSingleton<ITokenEstimator, HeuristicTokenEstimator>();
         services.AddSingleton<IAgentProviderProfileFactory, AgentProviderProfileFactory>();
         services.AddSingleton<IModelSelectionPolicy, ConfiguredOrFirstModelSelectionPolicy>();
 

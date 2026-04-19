@@ -8,6 +8,8 @@ namespace NanoAgent.Application.Conversation.Services;
 
 internal sealed class AgentConversationPipeline : IConversationPipeline
 {
+    private readonly TimeProvider _timeProvider;
+    private readonly ITokenEstimator _tokenEstimator;
     private readonly IApiKeySecretStore _secretStore;
     private readonly IConversationProviderClient _providerClient;
     private readonly IConversationResponseMapper _responseMapper;
@@ -17,6 +19,8 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
     private readonly ILogger<AgentConversationPipeline> _logger;
 
     public AgentConversationPipeline(
+        TimeProvider timeProvider,
+        ITokenEstimator tokenEstimator,
         IApiKeySecretStore secretStore,
         IConversationProviderClient providerClient,
         IConversationResponseMapper responseMapper,
@@ -25,6 +29,8 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         IConversationConfigurationAccessor configurationAccessor,
         ILogger<AgentConversationPipeline> logger)
     {
+        _timeProvider = timeProvider;
+        _tokenEstimator = tokenEstimator;
         _secretStore = secretStore;
         _providerClient = providerClient;
         _responseMapper = responseMapper;
@@ -50,6 +56,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         ConversationSettings settings = _configurationAccessor.GetSettings();
         using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(settings.RequestTimeout);
+        DateTimeOffset startedAt = _timeProvider.GetUtcNow();
 
         ApplicationLogMessages.ConversationRequestStarted(
             _logger,
@@ -119,7 +126,12 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 cancellationToken);
 
             ApplicationLogMessages.ConversationToolHandoffCompleted(_logger);
-            return ConversationTurnResult.ToolExecution(toolExecutionResult);
+            return ConversationTurnResult.ToolExecution(
+                toolExecutionResult,
+                CreateMetrics(
+                    startedAt,
+                    toolExecutionResult.ToDisplayText(),
+                    response.CompletionTokens));
         }
 
         if (string.IsNullOrWhiteSpace(response.AssistantMessage))
@@ -130,6 +142,23 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
 
         ApplicationLogMessages.ConversationAssistantMessageReceived(_logger);
 
-        return ConversationTurnResult.AssistantMessage(response.AssistantMessage);
+        return ConversationTurnResult.AssistantMessage(
+            response.AssistantMessage,
+            CreateMetrics(
+                startedAt,
+                response.AssistantMessage,
+                response.CompletionTokens));
+    }
+
+    private ConversationTurnMetrics CreateMetrics(
+        DateTimeOffset startedAt,
+        string responseText,
+        int? completionTokens)
+    {
+        TimeSpan elapsed = _timeProvider.GetUtcNow() - startedAt;
+        int estimatedOutputTokens = completionTokens is > 0
+            ? completionTokens.Value
+            : _tokenEstimator.Estimate(responseText);
+        return new ConversationTurnMetrics(elapsed, estimatedOutputTokens);
     }
 }

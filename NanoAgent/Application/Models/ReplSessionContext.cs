@@ -64,6 +64,8 @@ public sealed class ReplSessionContext
 
     public string ProviderName => ProviderProfile.ProviderKind.ToDisplayName();
 
+    public int TotalEstimatedOutputTokens { get; private set; }
+
     public bool ContainsModel(string modelId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
@@ -83,5 +85,16 @@ public sealed class ReplSessionContext
         }
 
         ActiveModelId = normalizedModelId;
+    }
+
+    public int AddEstimatedOutputTokens(int estimatedOutputTokens)
+    {
+        if (estimatedOutputTokens < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(estimatedOutputTokens));
+        }
+
+        TotalEstimatedOutputTokens += estimatedOutputTokens;
+        return TotalEstimatedOutputTokens;
     }
 }
