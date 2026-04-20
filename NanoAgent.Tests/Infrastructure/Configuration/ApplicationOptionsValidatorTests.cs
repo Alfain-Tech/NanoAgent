@@ -9,12 +9,10 @@ public sealed class ApplicationOptionsValidatorTests
     private readonly ApplicationOptionsValidator _sut = new();
 
     [Fact]
-    public void Validate_Should_ReturnSuccess_When_ProductAndStorageDirectoryAreProvided()
+    public void Validate_Should_ReturnSuccess_When_ApplicationOptionsAreValid()
     {
         ApplicationOptions options = new()
         {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent",
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions
             {
@@ -25,48 +23,6 @@ public sealed class ApplicationOptionsValidatorTests
         ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
 
         result.Succeeded.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Validate_Should_ReturnFailure_When_RequiredValuesAreMissing()
-    {
-        ApplicationOptions options = new()
-        {
-            ProductName = "",
-            StorageDirectoryName = " ",
-            Defaults = new ApplicationDefaultsOptions(),
-            ModelSelection = new ModelSelectionOptions
-            {
-                CacheDurationSeconds = 300
-            }
-        };
-
-        ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
-
-        result.Failed.Should().BeTrue();
-        result.Failures.Should().Contain(failure => failure.Contains("ProductName"));
-        result.Failures.Should().Contain(failure => failure.Contains("StorageDirectoryName"));
-    }
-
-    [Fact]
-    public void Validate_Should_ReturnFailure_When_StorageDirectoryContainsInvalidPathCharacters()
-    {
-        char invalidCharacter = Path.GetInvalidFileNameChars().First(character => character != '\0');
-        ApplicationOptions options = new()
-        {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = $"Final{invalidCharacter}Agent",
-            Defaults = new ApplicationDefaultsOptions(),
-            ModelSelection = new ModelSelectionOptions
-            {
-                CacheDurationSeconds = 300
-            }
-        };
-
-        ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
-
-        result.Failed.Should().BeTrue();
-        result.Failures.Should().Contain(failure => failure.Contains("invalid path characters"));
     }
 
     [Fact]
@@ -83,8 +39,6 @@ public sealed class ApplicationOptionsValidatorTests
     {
         ApplicationOptions options = new()
         {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent",
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions
             {
@@ -103,8 +57,6 @@ public sealed class ApplicationOptionsValidatorTests
     {
         ApplicationOptions options = new()
         {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent",
             Conversation = new ConversationOptions
             {
                 RequestTimeoutSeconds = 0
@@ -126,8 +78,6 @@ public sealed class ApplicationOptionsValidatorTests
     {
         ApplicationOptions options = new()
         {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent",
             Conversation = new ConversationOptions
             {
                 RequestTimeoutSeconds = -1
@@ -150,8 +100,6 @@ public sealed class ApplicationOptionsValidatorTests
     {
         ApplicationOptions options = new()
         {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent",
             Conversation = new ConversationOptions
             {
                 MaxToolRoundsPerTurn = 0

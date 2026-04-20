@@ -1,7 +1,5 @@
-using NanoAgent.Infrastructure.Configuration;
 using NanoAgent.Infrastructure.Storage;
 using FluentAssertions;
-using Microsoft.Extensions.Options;
 
 namespace NanoAgent.Tests.Infrastructure.Storage;
 
@@ -10,11 +8,7 @@ public sealed class UserDataPathProviderTests
     [Fact]
     public void GetLogsDirectoryPath_Should_ReturnStorageDirectoryLogsPath()
     {
-        UserDataPathProvider sut = new(Options.Create(new ApplicationOptions
-        {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent"
-        }));
+        UserDataPathProvider sut = new();
 
         string logsDirectoryPath = sut.GetLogsDirectoryPath();
 
@@ -25,11 +19,7 @@ public sealed class UserDataPathProviderTests
     [Fact]
     public void GetSectionsDirectoryPath_Should_ReturnStorageDirectorySectionsPath()
     {
-        UserDataPathProvider sut = new(Options.Create(new ApplicationOptions
-        {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent"
-        }));
+        UserDataPathProvider sut = new();
 
         string sectionsDirectoryPath = sut.GetSectionsDirectoryPath();
 

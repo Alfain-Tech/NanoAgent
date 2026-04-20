@@ -1,7 +1,5 @@
-using NanoAgent.Infrastructure.Configuration;
 using NanoAgent.Infrastructure.Secrets;
 using FluentAssertions;
-using Microsoft.Extensions.Options;
 
 namespace NanoAgent.Tests.Infrastructure.Secrets;
 
@@ -10,20 +8,12 @@ public sealed class ApiKeySecretStoreTests
     [Fact]
     public async Task LoadAsync_Should_RequestSecretUsingProductNameReference()
     {
-        ApplicationOptions options = new()
-        {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent"
-        };
-
         FakePlatformCredentialStore platformCredentialStore = new
         (
             "stored-secret"
         );
 
-        ApiKeySecretStore sut = new(
-            Options.Create(options),
-            platformCredentialStore);
+        ApiKeySecretStore sut = new(platformCredentialStore);
 
         string? result = await sut.LoadAsync(CancellationToken.None);
 
@@ -35,17 +25,9 @@ public sealed class ApiKeySecretStoreTests
     [Fact]
     public async Task SaveAsync_Should_TrimAndPersistSecretUsingProductNameReference()
     {
-        ApplicationOptions options = new()
-        {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent"
-        };
-
         FakePlatformCredentialStore platformCredentialStore = new(null);
 
-        ApiKeySecretStore sut = new(
-            Options.Create(options),
-            platformCredentialStore);
+        ApiKeySecretStore sut = new(platformCredentialStore);
 
         await sut.SaveAsync("  sk-secret  ", CancellationToken.None);
 

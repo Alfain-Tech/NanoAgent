@@ -1,6 +1,5 @@
 using NanoAgent.Application.Abstractions;
 using NanoAgent.Infrastructure.Configuration;
-using Microsoft.Extensions.Options;
 
 namespace NanoAgent.Infrastructure.Secrets;
 
@@ -8,14 +7,10 @@ internal sealed class ApiKeySecretStore : IApiKeySecretStore
 {
     private const string ApiKeyAccountName = "default-api-key";
 
-    private readonly ApplicationOptions _options;
     private readonly IPlatformCredentialStore _platformCredentialStore;
 
-    public ApiKeySecretStore(
-        IOptions<ApplicationOptions> options,
-        IPlatformCredentialStore platformCredentialStore)
+    public ApiKeySecretStore(IPlatformCredentialStore platformCredentialStore)
     {
-        _options = options.Value;
         _platformCredentialStore = platformCredentialStore;
     }
 
@@ -37,8 +32,8 @@ internal sealed class ApiKeySecretStore : IApiKeySecretStore
     private SecretReference BuildReference()
     {
         return new SecretReference(
-            _options.ProductName,
+            ApplicationIdentity.ProductName,
             ApiKeyAccountName,
-            $"{_options.ProductName} API key");
+            $"{ApplicationIdentity.ProductName} API key");
     }
 }

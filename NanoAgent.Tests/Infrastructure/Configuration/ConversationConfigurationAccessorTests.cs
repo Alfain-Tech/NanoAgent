@@ -12,8 +12,6 @@ public sealed class ConversationConfigurationAccessorTests
     {
         IOptions<ApplicationOptions> options = Options.Create(new ApplicationOptions
         {
-            ProductName = "NanoAgent",
-            StorageDirectoryName = "NanoAgent",
             Conversation = new ConversationOptions
             {
                 RequestTimeoutSeconds = 0,

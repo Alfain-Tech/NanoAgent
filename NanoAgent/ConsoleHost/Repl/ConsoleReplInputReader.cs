@@ -1,6 +1,5 @@
 using NanoAgent.Application.Abstractions;
 using NanoAgent.Infrastructure.Configuration;
-using Microsoft.Extensions.Options;
 
 namespace NanoAgent.ConsoleHost.Repl;
 
@@ -9,12 +8,10 @@ internal sealed class ConsoleReplInputReader : IReplInputReader
     private readonly Terminal.IConsoleTerminal _terminal;
     private readonly string _prompt;
 
-    public ConsoleReplInputReader(
-        Terminal.IConsoleTerminal terminal,
-        IOptions<ApplicationOptions> options)
+    public ConsoleReplInputReader(Terminal.IConsoleTerminal terminal)
     {
         _terminal = terminal;
-        _prompt = BuildPrompt(options.Value.ProductName);
+        _prompt = BuildPrompt(ApplicationIdentity.ProductName);
     }
 
     public Task<string?> ReadLineAsync(CancellationToken cancellationToken)

@@ -5,7 +5,6 @@ using NanoAgent.Domain.Models;
 using NanoAgent.Infrastructure.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace NanoAgent.Application.Services;
 
@@ -16,7 +15,6 @@ internal sealed class AgentApplicationRunner : IApplicationRunner
     private readonly IReplSectionService _replSectionService;
     private readonly IReplRuntime _replRuntime;
     private readonly IConfiguration _configuration;
-    private readonly ApplicationOptions _options;
     private readonly ILogger<AgentApplicationRunner> _logger;
 
     public AgentApplicationRunner(
@@ -25,7 +23,6 @@ internal sealed class AgentApplicationRunner : IApplicationRunner
         IReplSectionService replSectionService,
         IReplRuntime replRuntime,
         IConfiguration configuration,
-        IOptions<ApplicationOptions> options,
         ILogger<AgentApplicationRunner> logger)
     {
         _onboardingService = onboardingService;
@@ -33,13 +30,12 @@ internal sealed class AgentApplicationRunner : IApplicationRunner
         _replSectionService = replSectionService;
         _replRuntime = replRuntime;
         _configuration = configuration;
-        _options = options.Value;
         _logger = logger;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        ApplicationLogMessages.RunnerStarted(_logger, _options.ProductName);
+        ApplicationLogMessages.RunnerStarted(_logger, ApplicationIdentity.ProductName);
 
         OnboardingResult result = await _onboardingService.EnsureOnboardedAsync(cancellationToken);
         ReplSessionContext session;
@@ -55,7 +51,7 @@ internal sealed class AgentApplicationRunner : IApplicationRunner
                 modelResult.SelectionSource.ToString());
 
             session = await _replSectionService.CreateNewAsync(
-                _options.ProductName,
+                ApplicationIdentity.ProductName,
                 result.Profile,
                 modelResult.SelectedModelId,
                 modelResult.AvailableModels.Select(static model => model.Id).ToArray(),
@@ -64,7 +60,7 @@ internal sealed class AgentApplicationRunner : IApplicationRunner
         else
         {
             session = await _replSectionService.ResumeAsync(
-                _options.ProductName,
+                ApplicationIdentity.ProductName,
                 requestedSectionId,
                 cancellationToken);
         }

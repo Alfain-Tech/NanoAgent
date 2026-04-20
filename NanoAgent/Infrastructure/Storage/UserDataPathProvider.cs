@@ -1,6 +1,5 @@
 using NanoAgent.Application.Abstractions;
 using NanoAgent.Infrastructure.Configuration;
-using Microsoft.Extensions.Options;
 
 namespace NanoAgent.Infrastructure.Storage;
 
@@ -9,13 +8,6 @@ internal sealed class UserDataPathProvider : IUserDataPathProvider
     private const string ConfigurationFileName = "agent-profile.json";
     private const string LogsDirectoryName = "logs";
     private const string SectionsDirectoryName = "sections";
-
-    private readonly IOptions<ApplicationOptions> _options;
-
-    public UserDataPathProvider(IOptions<ApplicationOptions> options)
-    {
-        _options = options;
-    }
 
     public string GetConfigurationFilePath()
     {
@@ -44,7 +36,7 @@ internal sealed class UserDataPathProvider : IUserDataPathProvider
             Environment.SpecialFolder.ApplicationData,
             ".config");
 
-        return Path.Combine(root, _options.Value.StorageDirectoryName);
+        return Path.Combine(root, ApplicationIdentity.StorageDirectoryName);
     }
 
     private static string ResolveFolder(Environment.SpecialFolder specialFolder, string fallbackRelativePath)

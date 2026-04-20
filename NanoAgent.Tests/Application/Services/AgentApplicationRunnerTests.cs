@@ -5,9 +5,7 @@ using NanoAgent.Domain.Models;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Moq;
-using NanoAgent.Infrastructure.Configuration;
 
 namespace NanoAgent.Tests.Application.Services;
 
@@ -63,11 +61,6 @@ public sealed class AgentApplicationRunnerTests
             replSectionService.Object,
             replRuntime.Object,
             BuildConfiguration(),
-            Options.Create(new ApplicationOptions
-            {
-                ProductName = "NanoAgent",
-                StorageDirectoryName = "NanoAgent"
-            }),
             NullLogger<AgentApplicationRunner>.Instance);
 
         await sut.RunAsync(CancellationToken.None);
@@ -119,11 +112,6 @@ public sealed class AgentApplicationRunnerTests
             replSectionService.Object,
             replRuntime.Object,
             BuildConfiguration(sectionId),
-            Options.Create(new ApplicationOptions
-            {
-                ProductName = "NanoAgent",
-                StorageDirectoryName = "NanoAgent"
-            }),
             NullLogger<AgentApplicationRunner>.Instance);
 
         await sut.RunAsync(CancellationToken.None);
