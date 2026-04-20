@@ -14,6 +14,8 @@ namespace NanoAgent.Application.Tools.Serialization;
 [JsonSerializable(typeof(WorkspaceDirectoryEntry))]
 [JsonSerializable(typeof(WorkspaceTextSearchResult))]
 [JsonSerializable(typeof(WorkspaceTextSearchMatch))]
+[JsonSerializable(typeof(WebSearchResult))]
+[JsonSerializable(typeof(WebSearchResultItem))]
 [JsonSerializable(typeof(ShellCommandExecutionResult))]
 internal sealed partial class ToolJsonContext : JsonSerializerContext
 {

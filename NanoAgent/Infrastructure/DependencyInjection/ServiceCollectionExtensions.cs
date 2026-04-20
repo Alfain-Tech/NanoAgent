@@ -26,6 +26,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWorkspaceRootProvider, CurrentDirectoryWorkspaceRootProvider>();
         services.AddSingleton<IWorkspaceFileService, WorkspaceFileService>();
         services.AddSingleton<IShellCommandService, ShellCommandService>();
+        services.AddHttpClient<IWebSearchService, DuckDuckGoWebSearchService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(20);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("NanoAgent/1.0");
+        });
         services.AddSingleton<IAgentConfigurationStore, JsonAgentConfigurationStore>();
         services.AddSingleton<IApiKeySecretStore, ApiKeySecretStore>();
         services.AddSingleton<IModelCache, InMemoryModelCache>();

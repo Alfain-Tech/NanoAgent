@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, SearchFilesTool>();
         services.AddSingleton<ITool, FileWriteTool>();
         services.AddSingleton<ITool, TextSearchTool>();
+        services.AddSingleton<ITool, WebSearchTool>();
         services.AddSingleton<ITool, ShellCommandTool>();
         services.AddSingleton<IReplCommandHandler, ConfigCommandHandler>();
         services.AddSingleton<IReplCommandHandler, HelpCommandHandler>();
