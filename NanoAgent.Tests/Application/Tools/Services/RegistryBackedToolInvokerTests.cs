@@ -10,6 +10,7 @@ namespace NanoAgent.Tests.Application.Tools.Services;
 
 public sealed class RegistryBackedToolInvokerTests
 {
+    private static readonly StubPermissionConfigurationAccessor PermissionConfigurationAccessor = new();
     private static readonly ReplSessionContext Session = new(
         new AgentProviderProfile(ProviderKind.OpenAi, null),
         "gpt-5-mini",
@@ -20,7 +21,8 @@ public sealed class RegistryBackedToolInvokerTests
     {
         RegistryBackedToolInvoker sut = new(
             new ToolRegistry([], new ToolPermissionParser()),
-            new ToolPermissionEvaluator(new StubWorkspaceRootProvider()));
+            new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor),
+            new FixedPermissionApprovalPrompt(PermissionApprovalChoice.DenyOnce));
 
         ToolInvocationResult result = await sut.InvokeAsync(
             new ConversationToolCall("call_1", "missing_tool", "{}"),
@@ -37,7 +39,7 @@ public sealed class RegistryBackedToolInvokerTests
     {
         RegistryBackedToolInvoker sut = new(new ToolRegistry([
             new EchoTool()
-        ], new ToolPermissionParser()), new ToolPermissionEvaluator(new StubWorkspaceRootProvider()));
+        ], new ToolPermissionParser()), new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor), new FixedPermissionApprovalPrompt(PermissionApprovalChoice.DenyOnce));
 
         ToolInvocationResult result = await sut.InvokeAsync(
             new ConversationToolCall("call_1", "echo_tool", "[]"),
@@ -53,7 +55,7 @@ public sealed class RegistryBackedToolInvokerTests
     {
         RegistryBackedToolInvoker sut = new(new ToolRegistry([
             new ThrowingTool()
-        ], new ToolPermissionParser()), new ToolPermissionEvaluator(new StubWorkspaceRootProvider()));
+        ], new ToolPermissionParser()), new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor), new FixedPermissionApprovalPrompt(PermissionApprovalChoice.DenyOnce));
 
         ToolInvocationResult result = await sut.InvokeAsync(
             new ConversationToolCall("call_1", "exploding_tool", "{}"),
@@ -69,7 +71,8 @@ public sealed class RegistryBackedToolInvokerTests
     {
         RegistryBackedToolInvoker sut = new(
             new ToolRegistry([new SlowTool()], new ToolPermissionParser()),
-            new ToolPermissionEvaluator(new StubWorkspaceRootProvider()),
+            new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor),
+            new FixedPermissionApprovalPrompt(PermissionApprovalChoice.DenyOnce),
             TimeSpan.FromMilliseconds(50));
 
         ToolInvocationResult result = await sut.InvokeAsync(
@@ -82,20 +85,72 @@ public sealed class RegistryBackedToolInvokerTests
     }
 
     [Fact]
-    public async Task InvokeAsync_Should_ReturnPermissionDenied_When_ToolRequiresApproval()
+    public async Task InvokeAsync_Should_ExecuteTool_When_ApprovalPromptAllowsOnce()
     {
         ApprovalTool tool = new();
         RegistryBackedToolInvoker sut = new(
             new ToolRegistry([tool], new ToolPermissionParser()),
-            new ToolPermissionEvaluator(new StubWorkspaceRootProvider()));
+            new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor),
+            new FixedPermissionApprovalPrompt(PermissionApprovalChoice.AllowOnce));
 
         ToolInvocationResult result = await sut.InvokeAsync(
             new ConversationToolCall("call_1", "approval_tool", """{ "path": "src/app.cs" }"""),
             Session,
             CancellationToken.None);
 
+        result.Result.Status.Should().Be(ToolResultStatus.Success);
+        tool.WasExecuted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_Should_RememberAllowOverride_When_ApprovalPromptAllowsForAgent()
+    {
+        ReplSessionContext session = new(
+            new AgentProviderProfile(ProviderKind.OpenAi, null),
+            "gpt-5-mini",
+            ["gpt-5-mini"]);
+        ApprovalTool tool = new();
+        FixedPermissionApprovalPrompt prompt = new(PermissionApprovalChoice.AllowForAgent);
+        RegistryBackedToolInvoker sut = new(
+            new ToolRegistry([tool], new ToolPermissionParser()),
+            new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor),
+            prompt);
+
+        ToolInvocationResult first = await sut.InvokeAsync(
+            new ConversationToolCall("call_1", "approval_tool", """{ "path": "src/app.cs" }"""),
+            session,
+            CancellationToken.None);
+        ToolInvocationResult second = await sut.InvokeAsync(
+            new ConversationToolCall("call_2", "approval_tool", """{ "path": "src/app.cs" }"""),
+            session,
+            CancellationToken.None);
+
+        first.Result.Status.Should().Be(ToolResultStatus.Success);
+        second.Result.Status.Should().Be(ToolResultStatus.Success);
+        prompt.PromptCount.Should().Be(1);
+        session.PermissionOverrides.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_Should_ReturnPermissionDenied_When_ApprovalPromptDeniesForAgent()
+    {
+        ReplSessionContext session = new(
+            new AgentProviderProfile(ProviderKind.OpenAi, null),
+            "gpt-5-mini",
+            ["gpt-5-mini"]);
+        ApprovalTool tool = new();
+        RegistryBackedToolInvoker sut = new(
+            new ToolRegistry([tool], new ToolPermissionParser()),
+            new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor),
+            new FixedPermissionApprovalPrompt(PermissionApprovalChoice.DenyForAgent));
+
+        ToolInvocationResult result = await sut.InvokeAsync(
+            new ConversationToolCall("call_1", "approval_tool", """{ "path": "src/app.cs" }"""),
+            session,
+            CancellationToken.None);
+
         result.Result.Status.Should().Be(ToolResultStatus.PermissionDenied);
-        result.Result.Message.Should().Contain("requires explicit approval");
+        result.Result.Message.Should().ContainEquivalentOf("denied");
         tool.WasExecuted.Should().BeFalse();
     }
 
@@ -104,7 +159,8 @@ public sealed class RegistryBackedToolInvokerTests
     {
         RegistryBackedToolInvoker sut = new(
             new ToolRegistry([new ShellRestrictedTool()], new ToolPermissionParser()),
-            new ToolPermissionEvaluator(new StubWorkspaceRootProvider()));
+            new ToolPermissionEvaluator(new StubWorkspaceRootProvider(), PermissionConfigurationAccessor),
+            new FixedPermissionApprovalPrompt(PermissionApprovalChoice.DenyOnce));
 
         ToolInvocationResult result = await sut.InvokeAsync(
             new ConversationToolCall("call_1", "shell_restricted_tool", """{ "command": "rm -rf ." }"""),
@@ -242,6 +298,39 @@ public sealed class RegistryBackedToolInvokerTests
         public string GetWorkspaceRoot()
         {
             return Path.GetTempPath();
+        }
+    }
+
+    private sealed class StubPermissionConfigurationAccessor : IPermissionConfigurationAccessor
+    {
+        public PermissionSettings GetSettings()
+        {
+            return new PermissionSettings
+            {
+                DefaultMode = PermissionMode.Ask,
+                Rules = []
+            };
+        }
+    }
+
+    private sealed class FixedPermissionApprovalPrompt : IPermissionApprovalPrompt
+    {
+        private readonly PermissionApprovalChoice _choice;
+
+        public FixedPermissionApprovalPrompt(PermissionApprovalChoice choice)
+        {
+            _choice = choice;
+        }
+
+        public int PromptCount { get; private set; }
+
+        public Task<PermissionApprovalChoice> PromptAsync(
+            PermissionApprovalRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PromptCount++;
+            return Task.FromResult(_choice);
         }
     }
 }

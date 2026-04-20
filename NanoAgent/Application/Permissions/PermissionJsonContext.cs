@@ -8,7 +8,11 @@ namespace NanoAgent.Application.Permissions;
     UseStringEnumConverter = true)]
 [JsonSerializable(typeof(ToolPermissionPolicy))]
 [JsonSerializable(typeof(FilePathPermissionRule))]
+[JsonSerializable(typeof(PatchPermissionPolicy))]
+[JsonSerializable(typeof(PermissionRule))]
+[JsonSerializable(typeof(PermissionSettings))]
 [JsonSerializable(typeof(ShellCommandPermissionPolicy))]
+[JsonSerializable(typeof(WebRequestPermissionPolicy))]
 internal sealed partial class PermissionJsonContext : JsonSerializerContext
 {
 }

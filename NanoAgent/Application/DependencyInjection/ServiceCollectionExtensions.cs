@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IConversationPipeline, AgentConversationPipeline>();
         services.AddSingleton<IPermissionParser, ToolPermissionParser>();
         services.AddSingleton<IPermissionEvaluator, ToolPermissionEvaluator>();
+        services.AddSingleton<IPermissionApprovalPrompt, SelectionPermissionApprovalPrompt>();
         services.AddSingleton<IToolRegistry, ToolRegistry>();
         services.AddSingleton<IToolInvoker, RegistryBackedToolInvoker>();
         services.AddSingleton<IToolExecutionPipeline, ToolExecutionPipeline>();

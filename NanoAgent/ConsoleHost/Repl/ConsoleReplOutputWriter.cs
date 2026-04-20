@@ -25,6 +25,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
     private readonly ICliTextRenderer _renderer;
     private readonly ICliOutputTarget _outputTarget;
     private readonly IAnsiConsole _console;
+    private readonly IConsoleInteractionGate _interactionGate;
     private readonly IConsoleTerminal _terminal;
     private readonly ConsoleRenderSettings _renderSettings;
 
@@ -33,6 +34,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
         ICliTextRenderer renderer,
         ICliOutputTarget outputTarget,
         IAnsiConsole console,
+        IConsoleInteractionGate interactionGate,
         IConsoleTerminal terminal,
         ConsoleRenderSettings renderSettings)
     {
@@ -40,6 +42,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
         _renderer = renderer;
         _outputTarget = outputTarget;
         _console = console;
+        _interactionGate = interactionGate;
         _terminal = terminal;
         _renderSettings = renderSettings;
     }
@@ -69,6 +72,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
                 _terminal,
                 _outputTarget,
                 _console,
+                _interactionGate,
                 estimatedOutputTokens,
                 completedSessionEstimatedOutputTokens));
     }
@@ -253,6 +257,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
         private readonly IConsoleTerminal _terminal;
         private readonly ICliOutputTarget _outputTarget;
         private readonly IAnsiConsole _console;
+        private readonly IConsoleInteractionGate _interactionGate;
         private readonly int _sessionSeedEstimatedTokens;
         private readonly object _syncLock = new();
         private readonly CancellationTokenSource _cancellationSource = new();
@@ -264,12 +269,14 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
             IConsoleTerminal terminal,
             ICliOutputTarget outputTarget,
             IAnsiConsole console,
+            IConsoleInteractionGate interactionGate,
             int estimatedOutputTokens,
             int completedSessionEstimatedOutputTokens)
         {
             _terminal = terminal;
             _outputTarget = outputTarget;
             _console = console;
+            _interactionGate = interactionGate;
             _sessionSeedEstimatedTokens = Math.Max(0, completedSessionEstimatedOutputTokens) +
                 Math.Max(1, estimatedOutputTokens);
             _statusLineTop = terminal.CursorTop;
@@ -357,6 +364,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
 
             try
             {
+                using IDisposable _ = _interactionGate.EnterScope();
                 _terminal.SetCursorPosition(0, _statusLineTop);
                 _console.Write(new string(' ', width));
             }
@@ -414,6 +422,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
 
             try
             {
+                using IDisposable _ = _interactionGate.EnterScope();
                 _terminal.SetCursorPosition(0, _statusLineTop);
 
                 foreach (StatusSegment segment in visibleSegments)

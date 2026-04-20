@@ -39,6 +39,36 @@ public sealed class ToolPermissionParserTests
     }
 
     [Fact]
+    public void Parse_Should_NormalizeToolTagsAndAdditionalPermissionPolicies()
+    {
+        ToolPermissionParser sut = new();
+
+        ToolPermissionPolicy result = sut.Parse(
+            "apply_patch",
+            """
+            {
+              "approvalMode": "Automatic",
+              "toolTags": [" edit ", "EDIT"],
+              "patch": {
+                "patchArgumentName": " patch ",
+                "kind": "Write",
+                "allowedRoots": [" . ", "."]
+              },
+              "webRequest": {
+                "requestArgumentName": " query "
+              }
+            }
+            """);
+
+        result.ToolTags.Should().Equal("edit");
+        result.Patch.Should().NotBeNull();
+        result.Patch!.PatchArgumentName.Should().Be("patch");
+        result.Patch.AllowedRoots.Should().Equal(".");
+        result.WebRequest.Should().NotBeNull();
+        result.WebRequest!.RequestArgumentName.Should().Be("query");
+    }
+
+    [Fact]
     public void Parse_Should_Throw_When_ShellAllowlistIsEmpty()
     {
         ToolPermissionParser sut = new();

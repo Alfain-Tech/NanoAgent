@@ -6,6 +6,7 @@ public sealed class ReplSessionContext
 {
     private const string DefaultApplicationName = "NanoAgent";
     private readonly HashSet<string> _availableModelIds;
+    private readonly List<PermissionRule> _permissionOverrides = [];
 
     public ReplSessionContext(
         AgentProviderProfile providerProfile,
@@ -64,7 +65,15 @@ public sealed class ReplSessionContext
 
     public string ProviderName => ProviderProfile.ProviderKind.ToDisplayName();
 
+    public IReadOnlyList<PermissionRule> PermissionOverrides => _permissionOverrides;
+
     public int TotalEstimatedOutputTokens { get; private set; }
+
+    public void AddPermissionOverride(PermissionRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        _permissionOverrides.Add(rule);
+    }
 
     public bool ContainsModel(string modelId)
     {

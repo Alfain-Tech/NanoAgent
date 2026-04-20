@@ -24,7 +24,9 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
     [Fact]
     public void Evaluate_Should_Allow_When_PathIsWithinAllowedRoot()
     {
-        ToolPermissionEvaluator sut = new(new StubWorkspaceRootProvider(_workspaceRoot));
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
 
         PermissionEvaluationResult result = sut.Evaluate(
             new ToolPermissionPolicy
@@ -47,7 +49,9 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
     [Fact]
     public void Evaluate_Should_Deny_When_PathFallsOutsideAllowedRoot()
     {
-        ToolPermissionEvaluator sut = new(new StubWorkspaceRootProvider(_workspaceRoot));
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
 
         PermissionEvaluationResult result = sut.Evaluate(
             new ToolPermissionPolicy
@@ -71,7 +75,9 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
     [Fact]
     public void Evaluate_Should_ReturnRequiresApproval_When_PolicyRequiresApproval()
     {
-        ToolPermissionEvaluator sut = new(new StubWorkspaceRootProvider(_workspaceRoot));
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
 
         PermissionEvaluationResult result = sut.Evaluate(
             new ToolPermissionPolicy
@@ -81,13 +87,15 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
             new PermissionEvaluationContext(CreateContext("{}")));
 
         result.Decision.Should().Be(PermissionEvaluationDecision.RequiresApproval);
-        result.ReasonCode.Should().Be("approval_required");
+        result.ReasonCode.Should().Be("permission_approval_required");
     }
 
     [Fact]
     public void Evaluate_Should_Deny_When_ShellCommandIsNotAllowlisted()
     {
-        ToolPermissionEvaluator sut = new(new StubWorkspaceRootProvider(_workspaceRoot));
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
 
         PermissionEvaluationResult result = sut.Evaluate(
             new ToolPermissionPolicy
@@ -104,6 +112,101 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
         result.ReasonCode.Should().Be("shell_command_not_allowed");
     }
 
+    [Fact]
+    public void Evaluate_Should_Deny_When_ReadRuleMatchesDotEnvPattern()
+    {
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor(new PermissionSettings
+            {
+                DefaultMode = PermissionMode.Ask,
+                Rules =
+                [
+                    new PermissionRule
+                    {
+                        Tools = ["read"],
+                        Mode = PermissionMode.Allow
+                    },
+                    new PermissionRule
+                    {
+                        Tools = ["read"],
+                        Mode = PermissionMode.Deny,
+                        Patterns = [".env"]
+                    }
+                ]
+            }));
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                ToolTags = ["read"],
+                FilePaths =
+                [
+                    new FilePathPermissionRule
+                    {
+                        ArgumentName = "path",
+                        Kind = ToolPathAccessKind.Read,
+                        AllowedRoots = ["."]
+                    }
+                ]
+            },
+            new PermissionEvaluationContext(CreateContext("""{ "path": ".env" }""")));
+
+        result.Decision.Should().Be(PermissionEvaluationDecision.Denied);
+        result.ReasonCode.Should().Be("permission_policy_denied");
+    }
+
+    [Fact]
+    public void Evaluate_Should_Allow_When_AgentOverrideMatchesDeniedReadPattern()
+    {
+        ReplSessionContext session = CreateSession();
+        session.AddPermissionOverride(new PermissionRule
+        {
+            Tools = ["read"],
+            Mode = PermissionMode.Allow,
+            Patterns = [".env"]
+        });
+
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor(new PermissionSettings
+            {
+                DefaultMode = PermissionMode.Ask,
+                Rules =
+                [
+                    new PermissionRule
+                    {
+                        Tools = ["read"],
+                        Mode = PermissionMode.Allow
+                    },
+                    new PermissionRule
+                    {
+                        Tools = ["read"],
+                        Mode = PermissionMode.Deny,
+                        Patterns = [".env"]
+                    }
+                ]
+            }));
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                ToolTags = ["read"],
+                FilePaths =
+                [
+                    new FilePathPermissionRule
+                    {
+                        ArgumentName = "path",
+                        Kind = ToolPathAccessKind.Read,
+                        AllowedRoots = ["."]
+                    }
+                ]
+            },
+            new PermissionEvaluationContext(CreateContext("""{ "path": ".env" }""", session)));
+
+        result.IsAllowed.Should().BeTrue();
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_workspaceRoot))
@@ -112,7 +215,9 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
         }
     }
 
-    private static ToolExecutionContext CreateContext(string argumentsJson)
+    private static ToolExecutionContext CreateContext(
+        string argumentsJson,
+        ReplSessionContext? session = null)
     {
         using JsonDocument document = JsonDocument.Parse(argumentsJson);
 
@@ -120,10 +225,15 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
             "call_1",
             "tool",
             document.RootElement.Clone(),
-            new ReplSessionContext(
-                new AgentProviderProfile(ProviderKind.OpenAi, null),
-                "gpt-5-mini",
-                ["gpt-5-mini"]));
+            session ?? CreateSession());
+    }
+
+    private static ReplSessionContext CreateSession()
+    {
+        return new ReplSessionContext(
+            new AgentProviderProfile(ProviderKind.OpenAi, null),
+            "gpt-5-mini",
+            ["gpt-5-mini"]);
     }
 
     private sealed class StubWorkspaceRootProvider : global::NanoAgent.Application.Abstractions.IWorkspaceRootProvider
@@ -138,6 +248,25 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
         public string GetWorkspaceRoot()
         {
             return _workspaceRoot;
+        }
+    }
+
+    private sealed class StubPermissionConfigurationAccessor : global::NanoAgent.Application.Abstractions.IPermissionConfigurationAccessor
+    {
+        private readonly PermissionSettings _settings;
+
+        public StubPermissionConfigurationAccessor(PermissionSettings? settings = null)
+        {
+            _settings = settings ?? new PermissionSettings
+            {
+                DefaultMode = PermissionMode.Ask,
+                Rules = []
+            };
+        }
+
+        public PermissionSettings GetSettings()
+        {
+            return _settings;
         }
     }
 }

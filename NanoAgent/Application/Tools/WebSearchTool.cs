@@ -23,7 +23,15 @@ internal sealed class WebSearchTool : ITool
 
     public string Name => AgentToolNames.WebSearch;
 
-    public string PermissionRequirements => """{ "approvalMode": "Automatic" }""";
+    public string PermissionRequirements => """
+        {
+          "approvalMode": "Automatic",
+          "toolTags": ["webfetch"],
+          "webRequest": {
+            "requestArgumentName": "query"
+          }
+        }
+        """;
 
     public string Schema => """
         {

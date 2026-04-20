@@ -22,6 +22,7 @@ internal sealed class ShellCommandTool : ITool
     public string PermissionRequirements => """
         {
           "approvalMode": "Automatic",
+          "toolTags": ["bash"],
           "filePaths": [
             {
               "argumentName": "workingDirectory",

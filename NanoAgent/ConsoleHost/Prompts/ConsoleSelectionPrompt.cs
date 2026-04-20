@@ -7,15 +7,18 @@ namespace NanoAgent.ConsoleHost.Prompts;
 
 internal sealed class ConsoleSelectionPrompt : ISelectionPrompt
 {
+    private readonly IConsoleInteractionGate _interactionGate;
     private readonly IConsoleTerminal _terminal;
     private readonly IConsolePromptRenderer _renderer;
     private readonly IStatusMessageWriter _statusMessageWriter;
 
     public ConsoleSelectionPrompt(
+        IConsoleInteractionGate interactionGate,
         IConsoleTerminal terminal,
         IConsolePromptRenderer renderer,
         IStatusMessageWriter statusMessageWriter)
     {
+        _interactionGate = interactionGate;
         _terminal = terminal;
         _renderer = renderer;
         _statusMessageWriter = statusMessageWriter;
@@ -43,6 +46,8 @@ internal sealed class ConsoleSelectionPrompt : ISelectionPrompt
 
     private T PromptInteractiveAsync<T>(SelectionPromptRequest<T> request, CancellationToken cancellationToken)
     {
+        using IDisposable _ = _interactionGate.EnterScope();
+
         int selectedIndex = request.DefaultIndex;
         int optionsTop = _renderer.WriteInteractiveSelectionPrompt(request, selectedIndex);
 
@@ -102,6 +107,8 @@ internal sealed class ConsoleSelectionPrompt : ISelectionPrompt
 
     private async Task<T> PromptFallbackAsync<T>(SelectionPromptRequest<T> request, CancellationToken cancellationToken)
     {
+        using IDisposable _ = _interactionGate.EnterScope();
+
         _renderer.WriteFallbackSelectionPrompt(request);
 
         while (true)

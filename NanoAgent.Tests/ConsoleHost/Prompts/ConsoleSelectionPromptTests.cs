@@ -21,7 +21,7 @@ public sealed class ConsoleSelectionPromptTests
 
         ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
         Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",
@@ -49,7 +49,7 @@ public sealed class ConsoleSelectionPromptTests
 
         ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
         Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",
@@ -72,7 +72,7 @@ public sealed class ConsoleSelectionPromptTests
 
         ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
         Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",

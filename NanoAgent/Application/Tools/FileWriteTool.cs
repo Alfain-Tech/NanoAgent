@@ -21,6 +21,7 @@ internal sealed class FileWriteTool : ITool
     public string PermissionRequirements => """
         {
           "approvalMode": "Automatic",
+          "toolTags": ["edit"],
           "filePaths": [
             {
               "argumentName": "path",

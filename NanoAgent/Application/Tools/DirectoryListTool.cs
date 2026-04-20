@@ -21,6 +21,7 @@ internal sealed class DirectoryListTool : ITool
     public string PermissionRequirements => """
         {
           "approvalMode": "Automatic",
+          "toolTags": ["read"],
           "filePaths": [
             {
               "argumentName": "path",

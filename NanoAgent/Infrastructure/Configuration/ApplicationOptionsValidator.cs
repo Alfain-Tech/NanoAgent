@@ -46,6 +46,11 @@ public sealed class ApplicationOptionsValidator : IValidateOptions<ApplicationOp
             }
         }
 
+        if (options.Permissions is null)
+        {
+            failures.Add($"{ApplicationOptions.SectionName}:Permissions must be provided.");
+        }
+
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures);

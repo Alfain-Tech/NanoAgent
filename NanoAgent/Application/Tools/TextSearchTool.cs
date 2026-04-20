@@ -22,6 +22,7 @@ internal sealed class TextSearchTool : ITool
     public string PermissionRequirements => """
         {
           "approvalMode": "Automatic",
+          "toolTags": ["read"],
           "filePaths": [
             {
               "argumentName": "path",

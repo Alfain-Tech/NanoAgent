@@ -1,3 +1,5 @@
+using NanoAgent.Application.Models;
+
 namespace NanoAgent.Infrastructure.Configuration;
 
 public sealed class ApplicationOptions
@@ -13,4 +15,6 @@ public sealed class ApplicationOptions
     public ApplicationDefaultsOptions Defaults { get; set; } = new();
 
     public ModelSelectionOptions ModelSelection { get; set; } = new();
+
+    public PermissionSettings Permissions { get; set; } = new();
 }

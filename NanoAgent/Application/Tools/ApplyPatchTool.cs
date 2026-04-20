@@ -19,7 +19,17 @@ internal sealed class ApplyPatchTool : ITool
 
     public string Name => AgentToolNames.ApplyPatch;
 
-    public string PermissionRequirements => """{ "approvalMode": "Automatic" }""";
+    public string PermissionRequirements => """
+        {
+          "approvalMode": "Automatic",
+          "toolTags": ["edit"],
+          "patch": {
+            "patchArgumentName": "patch",
+            "kind": "Write",
+            "allowedRoots": ["."]
+          }
+        }
+        """;
 
     public string Schema => """
         {

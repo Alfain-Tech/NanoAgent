@@ -269,6 +269,7 @@ public sealed class ConsoleReplOutputWriterTests
             new CliTextRenderer(outputTarget, console, settings),
             outputTarget,
             console,
+            new ConsoleInteractionGate(),
             terminal,
             settings);
     }

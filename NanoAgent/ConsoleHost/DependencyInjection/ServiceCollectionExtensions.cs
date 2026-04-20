@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.AddSingleton<IConsoleInteractionGate, ConsoleInteractionGate>();
         services.AddSingleton<IConsoleTerminal, ConsoleTerminal>();
         services.AddSingleton<IAnsiConsole>(static serviceProvider =>
             SpectreConsoleFactory.Create(serviceProvider.GetRequiredService<IConsoleTerminal>()));

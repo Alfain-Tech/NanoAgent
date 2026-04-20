@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWorkspaceRootProvider, CurrentDirectoryWorkspaceRootProvider>();
         services.AddSingleton<IWorkspaceFileService, WorkspaceFileService>();
         services.AddSingleton<IShellCommandService, ShellCommandService>();
+        services.AddSingleton<IPermissionConfigurationAccessor, PermissionConfigurationAccessor>();
         services.AddHttpClient<IWebSearchService, DuckDuckGoWebSearchService>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(20);

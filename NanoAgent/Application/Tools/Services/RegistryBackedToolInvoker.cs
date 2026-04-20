@@ -1,5 +1,6 @@
 using System.Text.Json;
 using NanoAgent.Application.Abstractions;
+using NanoAgent.Application.Exceptions;
 using NanoAgent.Application.Models;
 using NanoAgent.Application.Tools.Serialization;
 
@@ -8,16 +9,19 @@ namespace NanoAgent.Application.Tools.Services;
 internal sealed class RegistryBackedToolInvoker : IToolInvoker
 {
     private readonly TimeSpan _defaultTimeout;
+    private readonly IPermissionApprovalPrompt _permissionApprovalPrompt;
     private readonly IPermissionEvaluator _permissionEvaluator;
     private readonly IToolRegistry _toolRegistry;
 
     public RegistryBackedToolInvoker(
         IToolRegistry toolRegistry,
         IPermissionEvaluator permissionEvaluator,
+        IPermissionApprovalPrompt permissionApprovalPrompt,
         TimeSpan? defaultTimeout = null)
     {
         _toolRegistry = toolRegistry;
         _permissionEvaluator = permissionEvaluator;
+        _permissionApprovalPrompt = permissionApprovalPrompt;
         _defaultTimeout = defaultTimeout ?? TimeSpan.FromSeconds(30);
     }
 
@@ -84,6 +88,15 @@ internal sealed class RegistryBackedToolInvoker : IToolInvoker
             registration.PermissionPolicy,
             new PermissionEvaluationContext(executionContext));
 
+        if (permissionResult.Decision == PermissionEvaluationDecision.RequiresApproval)
+        {
+            permissionResult = await ResolveApprovalAsync(
+                registration.PermissionPolicy,
+                executionContext,
+                permissionResult,
+                cancellationToken);
+        }
+
         if (!permissionResult.IsAllowed)
         {
             string reasonCode = permissionResult.ReasonCode!;
@@ -142,6 +155,84 @@ internal sealed class RegistryBackedToolInvoker : IToolInvoker
                         $"Tool failed: {toolCall.Name}",
                         exception.Message)));
         }
+    }
+
+    private async Task<PermissionEvaluationResult> ResolveApprovalAsync(
+        ToolPermissionPolicy permissionPolicy,
+        ToolExecutionContext executionContext,
+        PermissionEvaluationResult permissionResult,
+        CancellationToken cancellationToken)
+    {
+        PermissionRequestDescriptor request = permissionResult.Request ??
+                                              new PermissionRequestDescriptor(
+                                                  executionContext.ToolName,
+                                                  executionContext.ToolName,
+                                                  [executionContext.ToolName],
+                                                  []);
+
+        PermissionApprovalChoice decision;
+        try
+        {
+            decision = await _permissionApprovalPrompt.PromptAsync(
+                new PermissionApprovalRequest(
+                    executionContext.Session.ApplicationName,
+                    request,
+                    permissionResult.Reason ?? $"Permission approval is required for '{executionContext.ToolName}'."),
+                cancellationToken);
+        }
+        catch (PromptCancelledException)
+        {
+            return PermissionEvaluationResult.Denied(
+                "permission_request_cancelled",
+                $"Permission approval was cancelled for tool '{executionContext.ToolName}'.",
+                PermissionMode.Deny,
+                request);
+        }
+
+        switch (decision)
+        {
+            case PermissionApprovalChoice.AllowOnce:
+                return _permissionEvaluator.Evaluate(
+                    permissionPolicy,
+                    new PermissionEvaluationContext(executionContext, approvalGranted: true));
+
+            case PermissionApprovalChoice.AllowForAgent:
+                executionContext.Session.AddPermissionOverride(CreateOverrideRule(
+                    request,
+                    PermissionMode.Allow));
+                return _permissionEvaluator.Evaluate(
+                    permissionPolicy,
+                    new PermissionEvaluationContext(executionContext));
+
+            case PermissionApprovalChoice.DenyForAgent:
+                executionContext.Session.AddPermissionOverride(CreateOverrideRule(
+                    request,
+                    PermissionMode.Deny));
+                return PermissionEvaluationResult.Denied(
+                    "permission_denied_by_user",
+                    $"Permission was denied for tool '{executionContext.ToolName}' on this agent.",
+                    PermissionMode.Deny,
+                    request);
+
+            default:
+                return PermissionEvaluationResult.Denied(
+                    "permission_denied_by_user",
+                    $"Permission was denied for tool '{executionContext.ToolName}'.",
+                    PermissionMode.Deny,
+                    request);
+        }
+    }
+
+    private static PermissionRule CreateOverrideRule(
+        PermissionRequestDescriptor request,
+        PermissionMode mode)
+    {
+        return new PermissionRule
+        {
+            Mode = mode,
+            Patterns = request.Subjects.ToArray(),
+            Tools = [request.ToolKind]
+        };
     }
 
     private static JsonElement ParseArguments(ConversationToolCall toolCall)

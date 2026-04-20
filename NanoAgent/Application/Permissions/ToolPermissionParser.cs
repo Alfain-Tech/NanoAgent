@@ -50,15 +50,32 @@ internal sealed class ToolPermissionParser : IPermissionParser
             .Select(rule => NormalizeFilePathRule(toolName, rule))
             .ToArray();
 
+        PatchPermissionPolicy? patchPolicy = policy.Patch is null
+            ? null
+            : NormalizePatchPolicy(toolName, policy.Patch);
+
         ShellCommandPermissionPolicy? shellPolicy = policy.Shell is null
             ? null
             : NormalizeShellPolicy(toolName, policy.Shell);
+
+        string[] toolTags = (policy.ToolTags ?? [])
+            .Where(static tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(static tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        WebRequestPermissionPolicy? webRequestPolicy = policy.WebRequest is null
+            ? null
+            : NormalizeWebRequestPolicy(toolName, policy.WebRequest);
 
         return new ToolPermissionPolicy
         {
             ApprovalMode = policy.ApprovalMode,
             FilePaths = filePathRules,
-            Shell = shellPolicy
+            Patch = patchPolicy,
+            Shell = shellPolicy,
+            ToolTags = toolTags,
+            WebRequest = webRequestPolicy
         };
     }
 
@@ -94,6 +111,38 @@ internal sealed class ToolPermissionParser : IPermissionParser
         };
     }
 
+    private static PatchPermissionPolicy NormalizePatchPolicy(
+        string toolName,
+        PatchPermissionPolicy patchPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(patchPolicy);
+
+        if (string.IsNullOrWhiteSpace(patchPolicy.PatchArgumentName))
+        {
+            throw new InvalidOperationException(
+                $"Tool '{toolName}' must provide a non-empty patch argument name.");
+        }
+
+        string[] allowedRoots = (patchPolicy.AllowedRoots ?? [])
+            .Where(static root => !string.IsNullOrWhiteSpace(root))
+            .Select(static root => root.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (allowedRoots.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"Tool '{toolName}' must provide at least one allowed root for its patch permission policy.");
+        }
+
+        return new PatchPermissionPolicy
+        {
+            AllowedRoots = allowedRoots,
+            Kind = patchPolicy.Kind,
+            PatchArgumentName = patchPolicy.PatchArgumentName.Trim()
+        };
+    }
+
     private static ShellCommandPermissionPolicy NormalizeShellPolicy(
         string toolName,
         ShellCommandPermissionPolicy shellPolicy)
@@ -122,6 +171,24 @@ internal sealed class ToolPermissionParser : IPermissionParser
         {
             CommandArgumentName = shellPolicy.CommandArgumentName.Trim(),
             AllowedCommands = allowedCommands
+        };
+    }
+
+    private static WebRequestPermissionPolicy NormalizeWebRequestPolicy(
+        string toolName,
+        WebRequestPermissionPolicy webRequestPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(webRequestPolicy);
+
+        if (string.IsNullOrWhiteSpace(webRequestPolicy.RequestArgumentName))
+        {
+            throw new InvalidOperationException(
+                $"Tool '{toolName}' must provide a non-empty web request argument name.");
+        }
+
+        return new WebRequestPermissionPolicy
+        {
+            RequestArgumentName = webRequestPolicy.RequestArgumentName.Trim()
         };
     }
 }
