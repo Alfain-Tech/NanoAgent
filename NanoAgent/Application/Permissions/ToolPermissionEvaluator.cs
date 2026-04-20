@@ -286,13 +286,7 @@ internal sealed class ToolPermissionEvaluator : IPermissionEvaluator
         PermissionRequestDescriptor request,
         string verb)
     {
-        string subjectSummary = request.Subjects.Count == 0
-            ? "this tool request"
-            : request.Subjects.Count == 1
-                ? $"'{request.Subjects[0]}'"
-                : $"{request.Subjects.Count} targets";
-
-        return $"Permission {verb} use of '{request.ToolKind}' via tool '{request.ToolName}' for {subjectSummary}.";
+        return PermissionRequestDisplayFormatter.BuildDecisionMessage(request, verb);
     }
 
     private PermissionEvaluationResult EvaluateFilePathRule(

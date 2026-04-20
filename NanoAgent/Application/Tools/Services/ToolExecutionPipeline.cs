@@ -27,6 +27,7 @@ internal sealed class ToolExecutionPipeline : IToolExecutionPipeline
         }
 
         List<ToolInvocationResult> results = new(toolCalls.Count);
+        using IDisposable _ = session.BeginFileEditTransactionBatch();
 
         foreach (ConversationToolCall toolCall in toolCalls)
         {

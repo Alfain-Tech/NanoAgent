@@ -6,6 +6,7 @@ public sealed class ReplSessionContext
 {
     private const string DefaultApplicationName = "NanoAgent";
     private readonly HashSet<string> _availableModelIds;
+    private List<WorkspaceFileEditTransaction>? _batchedFileEditTransactions;
     private readonly List<ConversationRequestMessage> _conversationHistory = [];
     private readonly Stack<WorkspaceFileEditTransaction> _redoFileEditTransactions = new();
     private readonly Stack<WorkspaceFileEditTransaction> _undoFileEditTransactions = new();
@@ -73,6 +74,17 @@ public sealed class ReplSessionContext
     public IReadOnlyList<PermissionRule> PermissionOverrides => _permissionOverrides;
 
     public int TotalEstimatedOutputTokens { get; private set; }
+
+    public IDisposable BeginFileEditTransactionBatch()
+    {
+        if (_batchedFileEditTransactions is not null)
+        {
+            throw new InvalidOperationException("A file edit transaction batch is already active.");
+        }
+
+        _batchedFileEditTransactions = [];
+        return new FileEditTransactionBatchScope(this);
+    }
 
     public void AddPermissionOverride(PermissionRule rule)
     {
@@ -145,6 +157,12 @@ public sealed class ReplSessionContext
     {
         ArgumentNullException.ThrowIfNull(transaction);
 
+        if (_batchedFileEditTransactions is not null)
+        {
+            _batchedFileEditTransactions.Add(transaction);
+            return;
+        }
+
         _undoFileEditTransactions.Push(transaction);
         _redoFileEditTransactions.Clear();
     }
@@ -193,5 +211,90 @@ public sealed class ReplSessionContext
 
         WorkspaceFileEditTransaction transaction = _redoFileEditTransactions.Pop();
         _undoFileEditTransactions.Push(transaction);
+    }
+
+    private void CompleteFileEditTransactionBatch()
+    {
+        List<WorkspaceFileEditTransaction>? batch = _batchedFileEditTransactions;
+        _batchedFileEditTransactions = null;
+
+        if (batch is null || batch.Count == 0)
+        {
+            return;
+        }
+
+        WorkspaceFileEditTransaction transaction = batch.Count == 1
+            ? batch[0]
+            : MergeTransactions(batch);
+
+        _undoFileEditTransactions.Push(transaction);
+        _redoFileEditTransactions.Clear();
+    }
+
+    private static WorkspaceFileEditTransaction MergeTransactions(
+        IReadOnlyList<WorkspaceFileEditTransaction> transactions)
+    {
+        Dictionary<string, WorkspaceFileEditState> firstBeforeStates = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, WorkspaceFileEditState> lastAfterStates = new(StringComparer.OrdinalIgnoreCase);
+        List<string> orderedPaths = [];
+
+        foreach (WorkspaceFileEditTransaction transaction in transactions)
+        {
+            foreach (WorkspaceFileEditState state in transaction.BeforeStates)
+            {
+                if (firstBeforeStates.TryAdd(state.Path, state))
+                {
+                    orderedPaths.Add(state.Path);
+                }
+            }
+
+            foreach (WorkspaceFileEditState state in transaction.AfterStates)
+            {
+                if (!lastAfterStates.ContainsKey(state.Path) &&
+                    !orderedPaths.Contains(state.Path, StringComparer.OrdinalIgnoreCase))
+                {
+                    orderedPaths.Add(state.Path);
+                }
+
+                lastAfterStates[state.Path] = state;
+            }
+        }
+
+        WorkspaceFileEditState[] beforeStates = orderedPaths
+            .Where(firstBeforeStates.ContainsKey)
+            .Select(path => firstBeforeStates[path])
+            .ToArray();
+        WorkspaceFileEditState[] afterStates = orderedPaths
+            .Where(lastAfterStates.ContainsKey)
+            .Select(path => lastAfterStates[path])
+            .ToArray();
+        int fileCount = orderedPaths.Count;
+
+        return new WorkspaceFileEditTransaction(
+            $"tool round ({transactions.Count} edits across {fileCount} {(fileCount == 1 ? "file" : "files")})",
+            beforeStates,
+            afterStates);
+    }
+
+    private sealed class FileEditTransactionBatchScope : IDisposable
+    {
+        private ReplSessionContext? _session;
+
+        public FileEditTransactionBatchScope(ReplSessionContext session)
+        {
+            _session = session;
+        }
+
+        public void Dispose()
+        {
+            ReplSessionContext? session = _session;
+            if (session is null)
+            {
+                return;
+            }
+
+            _session = null;
+            session.CompleteFileEditTransactionBatch();
+        }
     }
 }

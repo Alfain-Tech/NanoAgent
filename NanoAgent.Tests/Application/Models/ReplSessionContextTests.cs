@@ -51,6 +51,31 @@ public sealed class ReplSessionContextTests
         session.TryGetPendingRedoFileEdit(out _).Should().BeFalse();
     }
 
+    [Fact]
+    public void BeginFileEditTransactionBatch_Should_GroupMultipleEditsIntoOneUndoEntry()
+    {
+        ReplSessionContext session = CreateSession();
+
+        using (session.BeginFileEditTransactionBatch())
+        {
+            session.RecordFileEditTransaction(new WorkspaceFileEditTransaction(
+                "file_write (README.md)",
+                [new WorkspaceFileEditState("README.md", exists: false, content: null)],
+                [new WorkspaceFileEditState("README.md", exists: true, content: "hello")]));
+            session.RecordFileEditTransaction(new WorkspaceFileEditTransaction(
+                "file_write (src/App.js)",
+                [new WorkspaceFileEditState("src/App.js", exists: true, content: "old")],
+                [new WorkspaceFileEditState("src/App.js", exists: true, content: "new")]));
+        }
+
+        session.TryGetPendingUndoFileEdit(out WorkspaceFileEditTransaction? pendingUndo).Should().BeTrue();
+        pendingUndo!.Description.Should().Be("tool round (2 edits across 2 files)");
+        pendingUndo.BeforeStates.Should().HaveCount(2);
+        pendingUndo.AfterStates.Should().HaveCount(2);
+        pendingUndo.BeforeStates.Select(static state => state.Path).Should().Equal("README.md", "src/App.js");
+        pendingUndo.AfterStates.Select(static state => state.Path).Should().Equal("README.md", "src/App.js");
+    }
+
     private static ReplSessionContext CreateSession()
     {
         return new ReplSessionContext(

@@ -18,22 +18,8 @@ internal sealed class SelectionPermissionApprovalPrompt : IPermissionApprovalPro
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        string subjectLabel = request.Request.ToolKind switch
-        {
-            "bash" => "Command",
-            "webfetch" => "Request",
-            "read" or "edit" or "external_directory" => "Path",
-            _ => "Target"
-        };
-
-        string subjectText = request.Request.Subjects.Count == 0
-            ? $"{subjectLabel}: (tool-wide)"
-            : string.Join(
-                Environment.NewLine,
-                request.Request.Subjects.Select(subject => $"{subjectLabel}: {subject}"));
-
         SelectionPromptRequest<PermissionApprovalChoice> selectionRequest = new(
-            $"Approve {request.Request.ToolKind} access?",
+            PermissionRequestDisplayFormatter.BuildApprovalTitle(request.Request),
             [
                 new SelectionPromptOption<PermissionApprovalChoice>(
                     "Allow once",
@@ -52,7 +38,7 @@ internal sealed class SelectionPermissionApprovalPrompt : IPermissionApprovalPro
                     PermissionApprovalChoice.DenyForAgent,
                     "Remember a deny override for this exact pattern on the current agent.")
             ],
-            $"{request.Reason}{Environment.NewLine}{Environment.NewLine}Tool: {request.Request.ToolName}{Environment.NewLine}{subjectText}",
+            PermissionRequestDisplayFormatter.BuildPromptDescription(request),
             DefaultIndex: 2,
             AllowCancellation: true);
 
