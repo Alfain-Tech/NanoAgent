@@ -7,6 +7,8 @@ public sealed class ReplSessionContext
     private const string DefaultApplicationName = "NanoAgent";
     private readonly HashSet<string> _availableModelIds;
     private readonly List<ConversationRequestMessage> _conversationHistory = [];
+    private readonly Stack<WorkspaceFileEditTransaction> _redoFileEditTransactions = new();
+    private readonly Stack<WorkspaceFileEditTransaction> _undoFileEditTransactions = new();
     private readonly List<PermissionRule> _permissionOverrides = [];
 
     public ReplSessionContext(
@@ -137,5 +139,59 @@ public sealed class ReplSessionContext
         return _conversationHistory
             .Skip(_conversationHistory.Count - maxMessageCount)
             .ToArray();
+    }
+
+    public void RecordFileEditTransaction(WorkspaceFileEditTransaction transaction)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        _undoFileEditTransactions.Push(transaction);
+        _redoFileEditTransactions.Clear();
+    }
+
+    public bool TryGetPendingUndoFileEdit(out WorkspaceFileEditTransaction? transaction)
+    {
+        if (_undoFileEditTransactions.Count == 0)
+        {
+            transaction = null;
+            return false;
+        }
+
+        transaction = _undoFileEditTransactions.Peek();
+        return true;
+    }
+
+    public void CompleteUndoFileEdit()
+    {
+        if (_undoFileEditTransactions.Count == 0)
+        {
+            throw new InvalidOperationException("There is no file edit transaction to undo.");
+        }
+
+        WorkspaceFileEditTransaction transaction = _undoFileEditTransactions.Pop();
+        _redoFileEditTransactions.Push(transaction);
+    }
+
+    public bool TryGetPendingRedoFileEdit(out WorkspaceFileEditTransaction? transaction)
+    {
+        if (_redoFileEditTransactions.Count == 0)
+        {
+            transaction = null;
+            return false;
+        }
+
+        transaction = _redoFileEditTransactions.Peek();
+        return true;
+    }
+
+    public void CompleteRedoFileEdit()
+    {
+        if (_redoFileEditTransactions.Count == 0)
+        {
+            throw new InvalidOperationException("There is no file edit transaction to redo.");
+        }
+
+        WorkspaceFileEditTransaction transaction = _redoFileEditTransactions.Pop();
+        _undoFileEditTransactions.Push(transaction);
     }
 }

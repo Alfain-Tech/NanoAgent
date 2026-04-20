@@ -41,6 +41,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IReplCommandHandler, ConfigCommandHandler>();
         services.AddSingleton<IReplCommandHandler, HelpCommandHandler>();
         services.AddSingleton<IReplCommandHandler, ModelsCommandHandler>();
+        services.AddSingleton<IReplCommandHandler, UndoCommandHandler>();
+        services.AddSingleton<IReplCommandHandler, RedoCommandHandler>();
         services.AddSingleton<IReplCommandHandler, UseModelCommandHandler>();
         services.AddSingleton<IReplCommandHandler, ExitCommandHandler>();
         services.AddSingleton<IModelDiscoveryService, ModelDiscoveryService>();

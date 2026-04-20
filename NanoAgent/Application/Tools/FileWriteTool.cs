@@ -1,6 +1,7 @@
 using System.Text.Json;
 using NanoAgent.Application.Abstractions;
 using NanoAgent.Application.Models;
+using NanoAgent.Application.Tools.Models;
 using NanoAgent.Application.Tools.Serialization;
 
 namespace NanoAgent.Application.Tools;
@@ -88,11 +89,13 @@ internal sealed class FileWriteTool : ITool
             ? overwriteValue
             : true;
 
-        Application.Tools.Models.WorkspaceFileWriteResult result = await _workspaceFileService.WriteFileAsync(
+        WorkspaceFileWriteExecutionResult executionResult = await _workspaceFileService.WriteFileWithTrackingAsync(
             safePath,
             safeContent,
             overwrite,
             cancellationToken);
+        context.Session.RecordFileEditTransaction(executionResult.EditTransaction);
+        WorkspaceFileWriteResult result = executionResult.Result;
 
         string renderText = result.OverwroteExistingFile
             ? $"Updated {result.Path} (+{result.AddedLineCount} -{result.RemovedLineCount})."

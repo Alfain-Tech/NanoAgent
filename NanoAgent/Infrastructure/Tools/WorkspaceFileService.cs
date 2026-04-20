@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using NanoAgent.Application.Abstractions;
+using NanoAgent.Application.Models;
 using NanoAgent.Application.Tools.Models;
 using NanoAgent.Infrastructure.Secrets;
 
@@ -34,6 +35,119 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         cancellationToken.ThrowIfCancellationRequested();
 
         PatchDocument document = ParsePatch(patch);
+        return await ApplyPatchDocumentAsync(document, cancellationToken);
+    }
+
+    public async Task<WorkspaceApplyPatchExecutionResult> ApplyPatchWithTrackingAsync(
+        string patch,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        PatchDocument document = ParsePatch(patch);
+        string[] trackedPaths = GetTrackedPatchPaths(document);
+        WorkspaceFileEditState[] beforeStates = await CaptureFileStatesAsync(
+            trackedPaths,
+            cancellationToken);
+        WorkspaceApplyPatchResult result = await ApplyPatchDocumentAsync(document, cancellationToken);
+        WorkspaceFileEditState[] afterStates = await CaptureFileStatesAsync(
+            trackedPaths,
+            cancellationToken);
+
+        WorkspaceFileEditTransaction? editTransaction = trackedPaths.Length == 0
+            ? null
+            : new WorkspaceFileEditTransaction(
+                $"apply_patch ({result.FileCount} {(result.FileCount == 1 ? "file" : "files")})",
+                beforeStates,
+                afterStates);
+
+        return new WorkspaceApplyPatchExecutionResult(
+            result,
+            editTransaction);
+    }
+
+    public async Task ApplyFileEditStatesAsync(
+        IReadOnlyList<WorkspaceFileEditState> states,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(states);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        WorkspaceFileEditState[] normalizedStates = states
+            .Where(static state => state is not null)
+            .GroupBy(static state => state.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group.Last())
+            .ToArray();
+
+        foreach (WorkspaceFileEditState state in normalizedStates.Where(static state => state.Exists))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string fullPath = ResolveWorkspacePath(state.Path, directoryRequired: false, fileRequired: false);
+            if (Directory.Exists(fullPath))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot restore file '{state.Path}' because a directory exists at that path.");
+            }
+
+            EnsureParentDirectory(fullPath);
+            await File.WriteAllTextAsync(
+                fullPath,
+                state.Content!,
+                Encoding.UTF8,
+                cancellationToken);
+        }
+
+        foreach (WorkspaceFileEditState state in normalizedStates.Where(static state => !state.Exists))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string fullPath = ResolveWorkspacePath(state.Path, directoryRequired: false, fileRequired: false);
+            if (Directory.Exists(fullPath))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot delete '{state.Path}' during rollback because a directory exists at that path.");
+            }
+
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+            }
+        }
+    }
+
+    public async Task<WorkspaceFileWriteExecutionResult> WriteFileWithTrackingAsync(
+        string path,
+        string content,
+        bool overwrite,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        WorkspaceFileEditState beforeState = await CaptureFileStateAsync(
+            path,
+            cancellationToken);
+        WorkspaceFileWriteResult result = await WriteFileAsync(
+            path,
+            content,
+            overwrite,
+            cancellationToken);
+        WorkspaceFileEditState afterState = await CaptureFileStateAsync(
+            path,
+            cancellationToken);
+
+        return new WorkspaceFileWriteExecutionResult(
+            result,
+            new WorkspaceFileEditTransaction(
+                $"file_write ({result.Path})",
+                [beforeState],
+                [afterState]));
+    }
+
+    private async Task<WorkspaceApplyPatchResult> ApplyPatchDocumentAsync(
+        PatchDocument document,
+        CancellationToken cancellationToken)
+    {
         List<WorkspaceApplyPatchFileResult> files = [];
 
         foreach (PatchOperation operation in document.Operations)
@@ -189,6 +303,51 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
             preview.RemovedLineCount,
             preview.Lines,
             preview.RemainingPreviewLineCount);
+    }
+
+    private async Task<WorkspaceFileEditState[]> CaptureFileStatesAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken)
+    {
+        List<WorkspaceFileEditState> states = [];
+
+        foreach (string path in paths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            states.Add(await CaptureFileStateAsync(path, cancellationToken));
+        }
+
+        return states.ToArray();
+    }
+
+    private async Task<WorkspaceFileEditState> CaptureFileStateAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        string fullPath = ResolveWorkspacePath(path, directoryRequired: false, fileRequired: false);
+        if (Directory.Exists(fullPath))
+        {
+            throw new InvalidOperationException(
+                $"Cannot track '{path}' for undo/redo because it resolves to a directory.");
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            return new WorkspaceFileEditState(
+                ToWorkspaceRelativePath(fullPath),
+                exists: false,
+                content: null);
+        }
+
+        string content = await File.ReadAllTextAsync(
+            fullPath,
+            Encoding.UTF8,
+            cancellationToken);
+
+        return new WorkspaceFileEditState(
+            ToWorkspaceRelativePath(fullPath),
+            exists: true,
+            content);
     }
 
     private async Task<WorkspaceApplyPatchFileResult> ApplyAddFileOperationAsync(
@@ -1195,6 +1354,17 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         return trailingNewLine && content.Length > 0
             ? content + "\n"
             : content;
+    }
+
+    private static string[] GetTrackedPatchPaths(PatchDocument document)
+    {
+        return document.Operations
+            .SelectMany(static operation => operation.MoveToPath is null
+                ? [operation.Path]
+                : new[] { operation.Path, operation.MoveToPath })
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static FileWritePreview BuildFileWritePreview(

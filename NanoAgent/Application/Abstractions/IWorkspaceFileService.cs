@@ -1,10 +1,19 @@
 using NanoAgent.Application.Tools.Models;
+using NanoAgent.Application.Models;
 
 namespace NanoAgent.Application.Abstractions;
 
 public interface IWorkspaceFileService
 {
+    Task ApplyFileEditStatesAsync(
+        IReadOnlyList<WorkspaceFileEditState> states,
+        CancellationToken cancellationToken);
+
     Task<WorkspaceApplyPatchResult> ApplyPatchAsync(
+        string patch,
+        CancellationToken cancellationToken);
+
+    Task<WorkspaceApplyPatchExecutionResult> ApplyPatchWithTrackingAsync(
         string patch,
         CancellationToken cancellationToken);
 
@@ -26,6 +35,12 @@ public interface IWorkspaceFileService
         CancellationToken cancellationToken);
 
     Task<WorkspaceFileWriteResult> WriteFileAsync(
+        string path,
+        string content,
+        bool overwrite,
+        CancellationToken cancellationToken);
+
+    Task<WorkspaceFileWriteExecutionResult> WriteFileWithTrackingAsync(
         string path,
         string content,
         bool overwrite,

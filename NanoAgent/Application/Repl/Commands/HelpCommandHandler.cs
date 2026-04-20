@@ -23,6 +23,8 @@ internal sealed class HelpCommandHandler : IReplCommandHandler
             "/exit - Exit the interactive shell.\n" +
             "/help - List the available shell commands and their usage.\n" +
             "/models - Show the available models in the current session.\n" +
+            "/redo - Re-apply the most recently undone file edit transaction.\n" +
+            "/undo - Roll back the most recent tracked file edit transaction.\n" +
             "/use <model> - Switch the active model for subsequent prompts.";
 
         return Task.FromResult(ReplCommandResult.Continue(HelpText));

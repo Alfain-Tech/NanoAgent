@@ -62,10 +62,10 @@ internal sealed class ApplyPatchTool : ITool
                     "Provide a non-empty 'patch' string."));
         }
 
-        WorkspaceApplyPatchResult result;
+        WorkspaceApplyPatchExecutionResult executionResult;
         try
         {
-            result = await _workspaceFileService.ApplyPatchAsync(
+            executionResult = await _workspaceFileService.ApplyPatchWithTrackingAsync(
                 patch!,
                 cancellationToken);
         }
@@ -78,6 +78,11 @@ internal sealed class ApplyPatchTool : ITool
                     "Patch rejected",
                     exception.Message));
         }
+        if (executionResult.EditTransaction is not null)
+        {
+            context.Session.RecordFileEditTransaction(executionResult.EditTransaction);
+        }
+        WorkspaceApplyPatchResult result = executionResult.Result;
 
         string renderText = result.Files.Count == 0
             ? "No files changed."

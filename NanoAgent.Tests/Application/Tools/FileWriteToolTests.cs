@@ -28,38 +28,48 @@ public sealed class FileWriteToolTests
     {
         Mock<IWorkspaceFileService> workspaceFileService = new(MockBehavior.Strict);
         workspaceFileService
-            .Setup(service => service.WriteFileAsync(
+            .Setup(service => service.WriteFileWithTrackingAsync(
                 "README.md",
                 "hello",
                 false,
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new WorkspaceFileWriteResult(
-                "README.md",
-                false,
-                5,
-                1,
-                0,
-                [new WorkspaceFileWritePreviewLine(1, "add", "hello")],
-                0));
+            .ReturnsAsync(new WorkspaceFileWriteExecutionResult(
+                new WorkspaceFileWriteResult(
+                    "README.md",
+                    false,
+                    5,
+                    1,
+                    0,
+                    [new WorkspaceFileWritePreviewLine(1, "add", "hello")],
+                    0),
+                new WorkspaceFileEditTransaction(
+                    "file_write (README.md)",
+                    [new WorkspaceFileEditState("README.md", exists: false, content: null)],
+                    [new WorkspaceFileEditState("README.md", exists: true, content: "hello")])));
 
         FileWriteTool sut = new(workspaceFileService.Object);
+        ReplSessionContext session = TestSessionFactory.Create();
 
         ToolResult result = await sut.ExecuteAsync(
-            CreateContext("""{ "path": "README.md", "content": "hello", "overwrite": false }"""),
+            CreateContext("""{ "path": "README.md", "content": "hello", "overwrite": false }""", session),
             CancellationToken.None);
 
         result.Status.Should().Be(ToolResultStatus.Success);
         result.JsonResult.Should().Contain("\"OverwroteExistingFile\":false");
         result.RenderPayload!.Title.Should().Contain("README.md");
+        session.TryGetPendingUndoFileEdit(out WorkspaceFileEditTransaction? transaction).Should().BeTrue();
+        transaction!.Description.Should().Be("file_write (README.md)");
     }
 
-    private static ToolExecutionContext CreateContext(string argumentsJson)
+    private static ToolExecutionContext CreateContext(
+        string argumentsJson,
+        ReplSessionContext? session = null)
     {
         using JsonDocument document = JsonDocument.Parse(argumentsJson);
         return new ToolExecutionContext(
             "call_1",
             "file_write",
             document.RootElement.Clone(),
-            TestSessionFactory.Create());
+            session ?? TestSessionFactory.Create());
     }
 }

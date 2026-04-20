@@ -1,4 +1,5 @@
 using NanoAgent.Application.Abstractions;
+using NanoAgent.Application.Models;
 using NanoAgent.Application.Tools.Models;
 using NanoAgent.Infrastructure.Secrets;
 using NanoAgent.Infrastructure.Tools;
@@ -159,6 +160,44 @@ public sealed class WorkspaceFileServiceTests : IDisposable
         (await File.ReadAllTextAsync(existingFile, CancellationToken.None)).Should().Contain("// done");
         (await File.ReadAllTextAsync(Path.Combine(_workspaceRoot, "src", "Notes.txt"), CancellationToken.None))
             .Should().Be("remember the tests");
+    }
+
+    [Fact]
+    public async Task WriteFileWithTrackingAsync_Should_ReturnUndoableBeforeAndAfterStates()
+    {
+        WorkspaceFileService sut = CreateSut();
+
+        WorkspaceFileWriteExecutionResult result = await sut.WriteFileWithTrackingAsync(
+            "README.md",
+            "hello",
+            overwrite: true,
+            CancellationToken.None);
+
+        result.EditTransaction.BeforeStates.Should().ContainSingle();
+        result.EditTransaction.BeforeStates[0].Path.Should().Be("README.md");
+        result.EditTransaction.BeforeStates[0].Exists.Should().BeFalse();
+        result.EditTransaction.AfterStates.Should().ContainSingle();
+        result.EditTransaction.AfterStates[0].Path.Should().Be("README.md");
+        result.EditTransaction.AfterStates[0].Exists.Should().BeTrue();
+        result.EditTransaction.AfterStates[0].Content.Should().Be("hello");
+    }
+
+    [Fact]
+    public async Task ApplyFileEditStatesAsync_Should_RestoreFilesFromTrackedStates()
+    {
+        WorkspaceFileService sut = CreateSut();
+        string readmePath = Path.Combine(_workspaceRoot, "README.md");
+        await File.WriteAllTextAsync(readmePath, "changed", CancellationToken.None);
+
+        await sut.ApplyFileEditStatesAsync(
+            [
+                new WorkspaceFileEditState("README.md", exists: true, content: "original"),
+                new WorkspaceFileEditState("docs/notes.txt", exists: false, content: null)
+            ],
+            CancellationToken.None);
+
+        (await File.ReadAllTextAsync(readmePath, CancellationToken.None)).Should().Be("original");
+        File.Exists(Path.Combine(_workspaceRoot, "docs", "notes.txt")).Should().BeFalse();
     }
 
     public void Dispose()

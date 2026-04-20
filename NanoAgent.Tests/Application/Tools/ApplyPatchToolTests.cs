@@ -28,42 +28,52 @@ public sealed class ApplyPatchToolTests
     {
         Mock<IWorkspaceFileService> workspaceFileService = new(MockBehavior.Strict);
         workspaceFileService
-            .Setup(service => service.ApplyPatchAsync(
+            .Setup(service => service.ApplyPatchWithTrackingAsync(
                 "*** Begin Patch\n*** End Patch",
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new WorkspaceApplyPatchResult(
-                1,
-                1,
-                0,
-                [
-                    new WorkspaceApplyPatchFileResult(
-                        "README.md",
-                        "update",
-                        null,
-                        1,
-                        0,
-                        [new WorkspaceFileWritePreviewLine(1, "add", "hello")],
-                        0)
-                ]));
+            .ReturnsAsync(new WorkspaceApplyPatchExecutionResult(
+                new WorkspaceApplyPatchResult(
+                    1,
+                    1,
+                    0,
+                    [
+                        new WorkspaceApplyPatchFileResult(
+                            "README.md",
+                            "update",
+                            null,
+                            1,
+                            0,
+                            [new WorkspaceFileWritePreviewLine(1, "add", "hello")],
+                            0)
+                    ]),
+                new WorkspaceFileEditTransaction(
+                    "apply_patch (1 file)",
+                    [new WorkspaceFileEditState("README.md", exists: true, content: "old")],
+                    [new WorkspaceFileEditState("README.md", exists: true, content: "hello")])));
 
         ApplyPatchTool sut = new(workspaceFileService.Object);
+        ReplSessionContext session = TestSessionFactory.Create();
 
         ToolResult result = await sut.ExecuteAsync(
-            CreateContext("""{ "patch": "*** Begin Patch\n*** End Patch" }"""),
+            CreateContext("""{ "patch": "*** Begin Patch\n*** End Patch" }""", session),
             CancellationToken.None);
 
         result.Status.Should().Be(ToolResultStatus.Success);
         result.JsonResult.Should().Contain("\"FileCount\":1");
         result.RenderPayload!.Text.Should().Contain("README.md");
+        session.TryGetPendingUndoFileEdit(out WorkspaceFileEditTransaction? transaction).Should().BeTrue();
+        transaction!.Description.Should().Be("apply_patch (1 file)");
     }
 
-    private static ToolExecutionContext CreateContext(string argumentsJson)
+    private static ToolExecutionContext CreateContext(
+        string argumentsJson,
+        ReplSessionContext? session = null)
     {
         using JsonDocument document = JsonDocument.Parse(argumentsJson);
         return new ToolExecutionContext(
             "call_1",
             "apply_patch",
             document.RootElement.Clone(),
-            TestSessionFactory.Create());
+            session ?? TestSessionFactory.Create());
     }
 }
