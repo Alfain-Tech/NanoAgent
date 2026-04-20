@@ -28,6 +28,7 @@ public sealed class ConsoleReplOutputWriterTests
         output.Should().Contain("GitHub: github.com/rizwan3d/NanoAgent");
         output.Should().Contain("Sponsor: ALFAIN Technologies (PVT) Limited (https://alfain.co/)");
         output.Should().Contain("Press Ctrl+C or use /exit to quit.");
+        output.Should().Contain("Press Esc while a response is running to interrupt the current request.");
         output.Should().Contain(new string('\u2500', 53));
     }
 
@@ -185,6 +186,7 @@ public sealed class ConsoleReplOutputWriterTests
         string output = GetPlainOutput(terminal.Output);
         output.Should().Contain("Working");
         output.Should().Contain("14 tokens est.");
+        output.Should().Contain("Esc to interrupt");
     }
 
     [Fact]
@@ -292,6 +294,8 @@ public sealed class ConsoleReplOutputWriterTests
         public bool IsInputRedirected => false;
 
         public bool IsOutputRedirected => false;
+
+        public bool KeyAvailable => false;
 
         public int WindowHeight => 37;
 

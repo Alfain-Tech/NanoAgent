@@ -111,4 +111,10 @@ internal static partial class ApplicationLogMessages
         Level = LogLevel.Information,
         Message = "Tool execution pipeline completed for the current conversation turn.")]
     public static partial void ConversationToolHandoffCompleted(ILogger logger);
+
+    [LoggerMessage(
+        EventId = 1018,
+        Level = LogLevel.Information,
+        Message = "The current REPL conversation request was interrupted by the user.")]
+    public static partial void ReplConversationInterrupted(ILogger logger);
 }

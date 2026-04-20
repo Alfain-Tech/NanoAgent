@@ -20,6 +20,8 @@ internal sealed class FakeConsoleTerminal : IConsoleTerminal
 
     public bool IsOutputRedirected { get; set; }
 
+    public bool KeyAvailable => _keyQueue.Count > 0;
+
     public string Output => BuildOutput();
 
     public int WindowHeight { get; set; } = 30;

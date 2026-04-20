@@ -42,6 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IConfirmationPrompt, ConsoleConfirmationPrompt>();
         services.AddSingleton<IStatusMessageWriter, ConsoleStatusMessageWriter>();
         services.AddSingleton<IReplInputReader, ConsoleReplInputReader>();
+        services.AddSingleton<IReplInterruptMonitor, ConsoleReplInterruptMonitor>();
         services.AddSingleton<IReplOutputWriter, ConsoleReplOutputWriter>();
         services.AddSingleton<ProcessExitCodeTracker>();
         services.AddHostedService<ConsoleApplicationHostedService>();

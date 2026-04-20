@@ -115,6 +115,12 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
                 "  Chat in the terminal. Press Ctrl+C or use /exit to quit.",
                 CliOutputStyle.Muted)
         ]);
+        await DelayIfAnimatedAsync(cancellationToken).ConfigureAwait(false);
+        _outputTarget.WriteLine([
+            new CliOutputSegment(
+                "  Press Esc while a response is running to interrupt the current request.",
+                CliOutputStyle.Muted)
+        ]);
         _outputTarget.WriteLine();
     }
 
@@ -395,6 +401,7 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
             segments.Add(new StatusSegment(
                 $" {MetricDisplayFormatter.FormatEstimatedOutputMetric(elapsed, CalculateRealtimeEstimate(elapsed))}",
                 new Style(Color.Grey)));
+            segments.Add(new StatusSegment("  Esc to interrupt", new Style(Color.Grey)));
 
             return segments;
         }

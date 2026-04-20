@@ -20,6 +20,25 @@ internal sealed class ConsoleTerminal : IConsoleTerminal
 
     public bool IsOutputRedirected => Console.IsOutputRedirected;
 
+    public bool KeyAvailable
+    {
+        get
+        {
+            try
+            {
+                return Console.KeyAvailable;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+    }
+
     public int WindowHeight
     {
         get

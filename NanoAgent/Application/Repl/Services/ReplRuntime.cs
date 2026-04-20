@@ -11,6 +11,7 @@ internal sealed class ReplRuntime : IReplRuntime
 
     private readonly IReplInputReader _inputReader;
     private readonly IReplOutputWriter _outputWriter;
+    private readonly IReplInterruptMonitor _interruptMonitor;
     private readonly IReplCommandParser _commandParser;
     private readonly IReplCommandDispatcher _commandDispatcher;
     private readonly IConversationPipeline _conversationPipeline;
@@ -20,6 +21,7 @@ internal sealed class ReplRuntime : IReplRuntime
     public ReplRuntime(
         IReplInputReader inputReader,
         IReplOutputWriter outputWriter,
+        IReplInterruptMonitor interruptMonitor,
         IReplCommandParser commandParser,
         IReplCommandDispatcher commandDispatcher,
         IConversationPipeline conversationPipeline,
@@ -28,6 +30,7 @@ internal sealed class ReplRuntime : IReplRuntime
     {
         _inputReader = inputReader;
         _outputWriter = outputWriter;
+        _interruptMonitor = interruptMonitor;
         _commandParser = commandParser;
         _commandDispatcher = commandDispatcher;
         _conversationPipeline = conversationPipeline;
@@ -101,20 +104,29 @@ internal sealed class ReplRuntime : IReplRuntime
                 continue;
             }
 
+            CancellationTokenSource? requestCancellationSource = null;
+
             try
             {
                 int estimatedInputTokens = _tokenEstimator.Estimate(input);
                 ConversationTurnResult response;
-                await using (IResponseProgress progress = await _outputWriter.BeginResponseProgressAsync(
-                                 estimatedInputTokens,
-                                 session.TotalEstimatedOutputTokens,
-                                 cancellationToken))
+                requestCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                using (requestCancellationSource)
                 {
-                    response = await _conversationPipeline.ProcessAsync(
-                        input,
-                        session,
-                        progress,
+                    await using IAsyncDisposable interruptScope = await _interruptMonitor.StartMonitoringAsync(
+                        requestCancellationSource,
                         cancellationToken);
+                    await using (IResponseProgress progress = await _outputWriter.BeginResponseProgressAsync(
+                                     estimatedInputTokens,
+                                     session.TotalEstimatedOutputTokens,
+                                     cancellationToken))
+                    {
+                        response = await _conversationPipeline.ProcessAsync(
+                            input,
+                            session,
+                            progress,
+                            requestCancellationSource.Token);
+                    }
                 }
 
                 if (!string.IsNullOrWhiteSpace(response.ResponseText))
@@ -135,6 +147,16 @@ internal sealed class ReplRuntime : IReplRuntime
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (OperationCanceledException) when (requestCancellationSource is not null &&
+                                                    requestCancellationSource.IsCancellationRequested &&
+                                                    !cancellationToken.IsCancellationRequested)
+            {
+                ApplicationLogMessages.ReplConversationInterrupted(_logger);
+
+                await _outputWriter.WriteWarningAsync(
+                    "Interrupted the current request. You can ask again or continue with a new prompt.",
+                    cancellationToken);
             }
             catch (Exception exception)
             {

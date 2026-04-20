@@ -38,6 +38,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -79,6 +80,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -117,6 +119,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -149,6 +152,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -193,6 +197,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -276,6 +281,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -333,6 +339,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -374,6 +381,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -383,6 +391,51 @@ public sealed class ReplRuntimeTests
 
         outputWriter.ErrorMessages.Should().ContainSingle(message =>
             message.Contains("command failed unexpectedly", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task RunAsync_Should_ContinueAfterConversationIsInterrupted_When_RequestIsCancelled()
+    {
+        ReplSessionContext session = CreateSession();
+        QueueReplInputReader inputReader = new("hello", "/exit");
+        RecordingReplOutputWriter outputWriter = new();
+        ParsedReplCommand exitCommand = new("/exit", "exit", string.Empty, []);
+
+        Mock<IReplCommandParser> commandParser = new(MockBehavior.Strict);
+        commandParser.Setup(parser => parser.Parse("/exit")).Returns(exitCommand);
+
+        Mock<IReplCommandDispatcher> commandDispatcher = new(MockBehavior.Strict);
+        commandDispatcher
+            .Setup(dispatcher => dispatcher.DispatchAsync(exitCommand, session, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReplCommandResult.Exit());
+
+        Mock<IConversationPipeline> conversationPipeline = new(MockBehavior.Strict);
+        conversationPipeline
+            .Setup(pipeline => pipeline.ProcessAsync("hello", session, It.IsAny<IConversationProgressSink>(), It.IsAny<CancellationToken>()))
+            .Returns<string, ReplSessionContext, IConversationProgressSink, CancellationToken>(static async (_, _, _, cancellationToken) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return ConversationTurnResult.AssistantMessage("should not happen");
+            });
+
+        Mock<ITokenEstimator> tokenEstimator = new(MockBehavior.Strict);
+        tokenEstimator.Setup(estimator => estimator.Estimate("hello")).Returns(2);
+
+        ReplRuntime sut = CreateSut(
+            inputReader,
+            outputWriter,
+            new ScheduledInterruptMonitor(TimeSpan.FromMilliseconds(25)),
+            commandParser.Object,
+            commandDispatcher.Object,
+            conversationPipeline.Object,
+            tokenEstimator.Object);
+
+        await sut.RunAsync(session, CancellationToken.None);
+
+        outputWriter.WarningMessages.Should().ContainSingle(message =>
+            message.Contains("Interrupted the current request", StringComparison.OrdinalIgnoreCase));
+        outputWriter.ErrorMessages.Should().BeEmpty();
+        outputWriter.Responses.Should().BeEmpty();
     }
 
     [Fact]
@@ -412,6 +465,7 @@ public sealed class ReplRuntimeTests
         ReplRuntime sut = CreateSut(
             inputReader,
             outputWriter,
+            new NoOpReplInterruptMonitor(),
             commandParser.Object,
             commandDispatcher.Object,
             conversationPipeline.Object,
@@ -428,6 +482,7 @@ public sealed class ReplRuntimeTests
     private static ReplRuntime CreateSut(
         IReplInputReader inputReader,
         IReplOutputWriter outputWriter,
+        IReplInterruptMonitor interruptMonitor,
         IReplCommandParser commandParser,
         IReplCommandDispatcher commandDispatcher,
         IConversationPipeline conversationPipeline,
@@ -436,6 +491,7 @@ public sealed class ReplRuntimeTests
         return new ReplRuntime(
             inputReader,
             outputWriter,
+            interruptMonitor,
             commandParser,
             commandDispatcher,
             conversationPipeline,
@@ -465,6 +521,79 @@ public sealed class ReplRuntimeTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(_inputs.Count == 0 ? null : _inputs.Dequeue());
+        }
+    }
+
+    private sealed class NoOpReplInterruptMonitor : IReplInterruptMonitor
+    {
+        public ValueTask<IAsyncDisposable> StartMonitoringAsync(
+            CancellationTokenSource requestCancellationSource,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult<IAsyncDisposable>(NoOpAsyncDisposable.Instance);
+        }
+    }
+
+    private sealed class ScheduledInterruptMonitor : IReplInterruptMonitor
+    {
+        private readonly TimeSpan _delay;
+
+        public ScheduledInterruptMonitor(TimeSpan delay)
+        {
+            _delay = delay;
+        }
+
+        public ValueTask<IAsyncDisposable> StartMonitoringAsync(
+            CancellationTokenSource requestCancellationSource,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            Task task = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(_delay, cancellationToken);
+                    requestCancellationSource.Cancel();
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                }
+            }, cancellationToken);
+
+            return ValueTask.FromResult<IAsyncDisposable>(new TaskBackedAsyncDisposable(task));
+        }
+    }
+
+    private sealed class TaskBackedAsyncDisposable : IAsyncDisposable
+    {
+        private readonly Task _task;
+
+        public TaskBackedAsyncDisposable(Task task)
+        {
+            _task = task;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                await _task;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+    }
+
+    private sealed class NoOpAsyncDisposable : IAsyncDisposable
+    {
+        public static NoOpAsyncDisposable Instance { get; } = new();
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
         }
     }
 
