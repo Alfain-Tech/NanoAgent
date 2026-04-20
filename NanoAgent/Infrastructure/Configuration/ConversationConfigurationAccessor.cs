@@ -22,9 +22,11 @@ internal sealed class ConversationConfigurationAccessor : IConversationConfigura
         TimeSpan requestTimeout = conversation.RequestTimeoutSeconds <= 0
             ? Timeout.InfiniteTimeSpan
             : TimeSpan.FromSeconds(conversation.RequestTimeoutSeconds);
+        int maxHistoryTurns = Math.Max(0, conversation.MaxHistoryTurns);
 
         return new ConversationSettings(
             systemPrompt,
-            requestTimeout);
+            requestTimeout,
+            maxHistoryTurns);
     }
 }

@@ -6,6 +6,7 @@ public sealed class ReplSessionContext
 {
     private const string DefaultApplicationName = "NanoAgent";
     private readonly HashSet<string> _availableModelIds;
+    private readonly List<ConversationRequestMessage> _conversationHistory = [];
     private readonly List<PermissionRule> _permissionOverrides = [];
 
     public ReplSessionContext(
@@ -65,6 +66,8 @@ public sealed class ReplSessionContext
 
     public string ProviderName => ProviderProfile.ProviderKind.ToDisplayName();
 
+    public IReadOnlyList<ConversationRequestMessage> ConversationHistory => _conversationHistory;
+
     public IReadOnlyList<PermissionRule> PermissionOverrides => _permissionOverrides;
 
     public int TotalEstimatedOutputTokens { get; private set; }
@@ -105,5 +108,34 @@ public sealed class ReplSessionContext
 
         TotalEstimatedOutputTokens += estimatedOutputTokens;
         return TotalEstimatedOutputTokens;
+    }
+
+    public void AddConversationTurn(
+        string userInput,
+        string assistantResponse)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userInput);
+        ArgumentException.ThrowIfNullOrWhiteSpace(assistantResponse);
+
+        _conversationHistory.Add(ConversationRequestMessage.User(userInput.Trim()));
+        _conversationHistory.Add(ConversationRequestMessage.AssistantMessage(assistantResponse.Trim()));
+    }
+
+    public IReadOnlyList<ConversationRequestMessage> GetConversationHistory(int maxHistoryTurns)
+    {
+        if (maxHistoryTurns <= 0 || _conversationHistory.Count == 0)
+        {
+            return [];
+        }
+
+        int maxMessageCount = checked(maxHistoryTurns * 2);
+        if (_conversationHistory.Count <= maxMessageCount)
+        {
+            return _conversationHistory.ToArray();
+        }
+
+        return _conversationHistory
+            .Skip(_conversationHistory.Count - maxMessageCount)
+            .ToArray();
     }
 }

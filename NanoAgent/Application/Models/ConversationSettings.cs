@@ -2,4 +2,5 @@ namespace NanoAgent.Application.Models;
 
 public sealed record ConversationSettings(
     string? SystemPrompt,
-    TimeSpan RequestTimeout);
+    TimeSpan RequestTimeout,
+    int MaxHistoryTurns);

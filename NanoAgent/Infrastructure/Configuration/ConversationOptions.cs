@@ -2,6 +2,8 @@ namespace NanoAgent.Infrastructure.Configuration;
 
 public sealed class ConversationOptions
 {
+    public int MaxHistoryTurns { get; set; } = 12;
+
     public int RequestTimeoutSeconds { get; set; }
 
     public string? SystemPrompt { get; set; } =

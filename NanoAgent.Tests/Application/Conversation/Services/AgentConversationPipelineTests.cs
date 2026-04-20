@@ -14,14 +14,10 @@ namespace NanoAgent.Tests.Application.Conversation.Services;
 
 public sealed class AgentConversationPipelineTests
 {
-    private static readonly ReplSessionContext Session = new(
-        new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
-        "gpt-5-mini",
-        ["gpt-5-mini", "gpt-4.1"]);
-
     [Fact]
     public async Task ProcessAsync_Should_ReturnAssistantMessage_When_ResponseContainsNormalAssistantContent()
     {
+        ReplSessionContext session = CreateSession();
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
@@ -30,7 +26,7 @@ public sealed class AgentConversationPipelineTests
         Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ConversationSettings("You are helpful.", TimeSpan.FromSeconds(30)));
+            .Returns(CreateSettings("You are helpful."));
 
         Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
         toolRegistry
@@ -70,19 +66,21 @@ public sealed class AgentConversationPipelineTests
 
         ConversationTurnResult result = await sut.ProcessAsync(
             "Plan the next refactor.",
-            Session,
+            session,
             CancellationToken.None);
 
         result.Kind.Should().Be(ConversationTurnResultKind.AssistantMessage);
         result.ResponseText.Should().Be("Ready to help.");
         result.Metrics.Should().NotBeNull();
         result.Metrics!.EstimatedOutputTokens.Should().BeGreaterThan(0);
+        session.ConversationHistory.Should().HaveCount(2);
         toolExecutionPipeline.VerifyNoOtherCalls();
     }
 
     [Fact]
     public async Task ProcessAsync_Should_ContinueConversationAfterToolExecution_When_ResponseContainsToolCalls()
     {
+        ReplSessionContext session = CreateSession();
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
@@ -91,7 +89,7 @@ public sealed class AgentConversationPipelineTests
         Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ConversationSettings(null, TimeSpan.FromSeconds(30)));
+            .Returns(CreateSettings());
 
         Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
         toolRegistry
@@ -142,7 +140,7 @@ public sealed class AgentConversationPipelineTests
         toolExecutionPipeline
             .Setup(pipeline => pipeline.ExecuteAsync(
                 It.Is<IReadOnlyList<ConversationToolCall>>(calls => calls.Count == 1 && calls[0].Name == "directory_list"),
-                Session,
+                session,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ToolExecutionBatchResult([
                 new ToolInvocationResult(
@@ -169,7 +167,7 @@ public sealed class AgentConversationPipelineTests
 
         ConversationTurnResult result = await sut.ProcessAsync(
             "Which models can I use?",
-            Session,
+            session,
             progressSink,
             CancellationToken.None);
 
@@ -201,11 +199,14 @@ public sealed class AgentConversationPipelineTests
         progressSink.StartedToolBatches[0].Should().ContainSingle(tool => tool.Name == "directory_list");
         progressSink.CompletedToolBatches.Should().ContainSingle();
         progressSink.CompletedToolBatches[0].Results.Should().ContainSingle(result => result.ToolName == "directory_list");
+        session.ConversationHistory.Should().HaveCount(2);
+        session.ConversationHistory[1].Content.Should().Be("I inspected the workspace and can create the requested files next.");
     }
 
     [Fact]
     public async Task ProcessAsync_Should_SendStructuredFailureFeedback_When_ToolExecutionFails()
     {
+        ReplSessionContext session = CreateSession();
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
@@ -214,7 +215,7 @@ public sealed class AgentConversationPipelineTests
         Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ConversationSettings(null, TimeSpan.FromSeconds(30)));
+            .Returns(CreateSettings());
 
         Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
         toolRegistry
@@ -263,7 +264,7 @@ public sealed class AgentConversationPipelineTests
         toolExecutionPipeline
             .Setup(pipeline => pipeline.ExecuteAsync(
                 It.Is<IReadOnlyList<ConversationToolCall>>(calls => calls.Count == 1 && calls[0].Name == "file_write"),
-                Session,
+                session,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ToolExecutionBatchResult([
                 new ToolInvocationResult(
@@ -287,7 +288,7 @@ public sealed class AgentConversationPipelineTests
 
         ConversationTurnResult result = await sut.ProcessAsync(
             "Write the homepage file.",
-            Session,
+            session,
             CancellationToken.None);
 
         result.Kind.Should().Be(ConversationTurnResultKind.AssistantMessage);
@@ -310,6 +311,7 @@ public sealed class AgentConversationPipelineTests
     [Fact]
     public async Task ProcessAsync_Should_ThrowConversationPipelineException_When_ApiKeyIsMissing()
     {
+        ReplSessionContext session = CreateSession();
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
@@ -325,7 +327,7 @@ public sealed class AgentConversationPipelineTests
             Mock.Of<IToolRegistry>(),
             Mock.Of<IConversationConfigurationAccessor>());
 
-        Func<Task> action = () => sut.ProcessAsync("hello", Session, CancellationToken.None);
+        Func<Task> action = () => sut.ProcessAsync("hello", session, CancellationToken.None);
 
         await action.Should().ThrowAsync<ConversationPipelineException>()
             .WithMessage("*API key is missing*");
@@ -334,6 +336,7 @@ public sealed class AgentConversationPipelineTests
     [Fact]
     public async Task ProcessAsync_Should_PropagateConversationProviderException_When_ProviderFails()
     {
+        ReplSessionContext session = CreateSession();
         Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
         secretStore
             .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
@@ -342,7 +345,7 @@ public sealed class AgentConversationPipelineTests
         Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
         configurationAccessor
             .Setup(accessor => accessor.GetSettings())
-            .Returns(new ConversationSettings(null, TimeSpan.FromSeconds(30)));
+            .Returns(CreateSettings());
 
         Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
         toolRegistry
@@ -368,10 +371,138 @@ public sealed class AgentConversationPipelineTests
             toolRegistry.Object,
             configurationAccessor.Object);
 
-        Func<Task> action = () => sut.ProcessAsync("hello", Session, CancellationToken.None);
+        Func<Task> action = () => sut.ProcessAsync("hello", session, CancellationToken.None);
 
         await action.Should().ThrowAsync<ConversationProviderException>()
             .WithMessage("Provider unavailable.");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Should_SendPreviousTurns_When_SubsequentTurnRuns()
+    {
+        ReplSessionContext session = CreateSession();
+        Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
+        secretStore
+            .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("test-key");
+
+        Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
+        configurationAccessor
+            .Setup(accessor => accessor.GetSettings())
+            .Returns(CreateSettings());
+
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([]);
+
+        List<ConversationProviderRequest> requests = [];
+        Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
+        providerClient
+            .Setup(client => client.SendAsync(
+                It.IsAny<ConversationProviderRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ConversationProviderRequest, CancellationToken>((request, _) =>
+            {
+                requests.Add(request);
+                return Task.FromResult(new ConversationProviderPayload(
+                    ProviderKind.OpenAiCompatible,
+                    """{ "choices": [] }""",
+                    $"resp_{requests.Count}"));
+            });
+
+        Mock<IConversationResponseMapper> responseMapper = new(MockBehavior.Strict);
+        responseMapper
+            .SetupSequence(mapper => mapper.Map(It.IsAny<ConversationProviderPayload>()))
+            .Returns(new ConversationResponse("First reply.", [], "resp_1"))
+            .Returns(new ConversationResponse("Second reply.", [], "resp_2"));
+
+        AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
+            secretStore.Object,
+            providerClient.Object,
+            responseMapper.Object,
+            Mock.Of<IToolExecutionPipeline>(),
+            toolRegistry.Object,
+            configurationAccessor.Object);
+
+        await sut.ProcessAsync("First question", session, CancellationToken.None);
+        await sut.ProcessAsync("What did I just ask?", session, CancellationToken.None);
+
+        requests.Should().HaveCount(2);
+        requests[1].Messages.Should().HaveCount(3);
+        requests[1].Messages[0].Role.Should().Be("user");
+        requests[1].Messages[0].Content.Should().Be("First question");
+        requests[1].Messages[1].Role.Should().Be("assistant");
+        requests[1].Messages[1].Content.Should().Be("First reply.");
+        requests[1].Messages[2].Role.Should().Be("user");
+        requests[1].Messages[2].Content.Should().Be("What did I just ask?");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Should_TrimStoredHistory_When_MaxHistoryTurnsIsLimited()
+    {
+        ReplSessionContext session = CreateSession();
+        Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
+        secretStore
+            .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("test-key");
+
+        Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
+        configurationAccessor
+            .Setup(accessor => accessor.GetSettings())
+            .Returns(CreateSettings(maxHistoryTurns: 1));
+
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([]);
+
+        List<ConversationProviderRequest> requests = [];
+        Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
+        providerClient
+            .Setup(client => client.SendAsync(
+                It.IsAny<ConversationProviderRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ConversationProviderRequest, CancellationToken>((request, _) =>
+            {
+                requests.Add(request);
+                return Task.FromResult(new ConversationProviderPayload(
+                    ProviderKind.OpenAiCompatible,
+                    """{ "choices": [] }""",
+                    $"resp_{requests.Count}"));
+            });
+
+        Mock<IConversationResponseMapper> responseMapper = new(MockBehavior.Strict);
+        responseMapper
+            .SetupSequence(mapper => mapper.Map(It.IsAny<ConversationProviderPayload>()))
+            .Returns(new ConversationResponse("Reply one.", [], "resp_1"))
+            .Returns(new ConversationResponse("Reply two.", [], "resp_2"))
+            .Returns(new ConversationResponse("Reply three.", [], "resp_3"));
+
+        AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
+            secretStore.Object,
+            providerClient.Object,
+            responseMapper.Object,
+            Mock.Of<IToolExecutionPipeline>(),
+            toolRegistry.Object,
+            configurationAccessor.Object);
+
+        await sut.ProcessAsync("Question one", session, CancellationToken.None);
+        await sut.ProcessAsync("Question two", session, CancellationToken.None);
+        await sut.ProcessAsync("Question three", session, CancellationToken.None);
+
+        requests.Should().HaveCount(3);
+        requests[2].Messages.Should().HaveCount(3);
+        requests[2].Messages[0].Content.Should().Be("Question two");
+        requests[2].Messages[1].Content.Should().Be("Reply two.");
+        requests[2].Messages[2].Content.Should().Be("Question three");
+        requests[2].Messages.Select(static message => message.Content)
+            .Should()
+            .NotContain("Question one");
     }
 
     private static AgentConversationPipeline CreateSut(
@@ -405,6 +536,24 @@ public sealed class AgentConversationPipelineTests
             name,
             $"Description for {name}",
             schemaDocument.RootElement.Clone());
+    }
+
+    private static ReplSessionContext CreateSession()
+    {
+        return new ReplSessionContext(
+            new AgentProviderProfile(ProviderKind.OpenAiCompatible, "https://provider.example.com/v1"),
+            "gpt-5-mini",
+            ["gpt-5-mini", "gpt-4.1"]);
+    }
+
+    private static ConversationSettings CreateSettings(
+        string? systemPrompt = null,
+        int maxHistoryTurns = 12)
+    {
+        return new ConversationSettings(
+            systemPrompt,
+            TimeSpan.FromSeconds(30),
+            maxHistoryTurns);
     }
 
     private sealed class RecordingConversationProgressSink : IConversationProgressSink

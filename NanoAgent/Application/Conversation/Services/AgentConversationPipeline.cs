@@ -74,9 +74,11 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(settings.RequestTimeout);
         DateTimeOffset startedAt = _timeProvider.GetUtcNow();
+        string normalizedInput = input.Trim();
         List<ConversationRequestMessage> messages =
         [
-            ConversationRequestMessage.User(input.Trim())
+            .. session.GetConversationHistory(settings.MaxHistoryTurns),
+            ConversationRequestMessage.User(normalizedInput)
         ];
         List<ToolInvocationResult> executedToolResults = [];
         int totalCompletionTokens = 0;
@@ -189,6 +191,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             }
 
             ApplicationLogMessages.ConversationAssistantMessageReceived(_logger);
+            session.AddConversationTurn(normalizedInput, response.AssistantMessage);
 
             return ConversationTurnResult.AssistantMessage(
                 response.AssistantMessage,
