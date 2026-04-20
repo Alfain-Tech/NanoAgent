@@ -4,6 +4,10 @@ namespace NanoAgent.Application.Abstractions;
 
 public interface IWorkspaceFileService
 {
+    Task<WorkspaceApplyPatchResult> ApplyPatchAsync(
+        string patch,
+        CancellationToken cancellationToken);
+
     Task<WorkspaceDirectoryListResult> ListDirectoryAsync(
         string? path,
         bool recursive,
@@ -11,6 +15,10 @@ public interface IWorkspaceFileService
 
     Task<WorkspaceFileReadResult> ReadFileAsync(
         string path,
+        CancellationToken cancellationToken);
+
+    Task<WorkspaceFileSearchResult> SearchFilesAsync(
+        WorkspaceFileSearchRequest request,
         CancellationToken cancellationToken);
 
     Task<WorkspaceTextSearchResult> SearchTextAsync(

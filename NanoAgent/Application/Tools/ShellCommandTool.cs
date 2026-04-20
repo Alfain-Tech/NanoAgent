@@ -15,7 +15,7 @@ internal sealed class ShellCommandTool : ITool
         _shellCommandService = shellCommandService;
     }
 
-    public string Description => "Run a shell command in the current workspace and capture stdout, stderr, and exit code.";
+    public string Description => "Run an OS-native shell command in the current workspace and capture stdout, stderr, and exit code.";
 
     public string Name => AgentToolNames.ShellCommand;
 
@@ -31,18 +31,25 @@ internal sealed class ShellCommandTool : ITool
           ],
           "shell": {
             "commandArgumentName": "command",
-            "allowedCommands": [
+              "allowedCommands": [
               "cat",
               "dir",
               "dotnet",
+              "find",
+              "findstr",
               "Get-ChildItem",
               "Get-Content",
+              "Get-Item",
               "Get-Location",
               "git",
+              "grep",
+              "head",
               "ls",
               "pwd",
               "rg",
+              "sed",
               "Select-String",
+              "type",
               "which"
             ]
           }

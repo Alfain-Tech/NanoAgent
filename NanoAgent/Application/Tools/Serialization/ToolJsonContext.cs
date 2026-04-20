@@ -4,7 +4,10 @@ using NanoAgent.Application.Tools.Models;
 namespace NanoAgent.Application.Tools.Serialization;
 
 [JsonSerializable(typeof(ToolErrorPayload))]
+[JsonSerializable(typeof(WorkspaceApplyPatchFileResult))]
+[JsonSerializable(typeof(WorkspaceApplyPatchResult))]
 [JsonSerializable(typeof(WorkspaceFileReadResult))]
+[JsonSerializable(typeof(WorkspaceFileSearchResult))]
 [JsonSerializable(typeof(WorkspaceFileWritePreviewLine))]
 [JsonSerializable(typeof(WorkspaceFileWriteResult))]
 [JsonSerializable(typeof(WorkspaceDirectoryListResult))]

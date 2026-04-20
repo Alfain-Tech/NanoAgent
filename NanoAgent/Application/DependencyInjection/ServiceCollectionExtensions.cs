@@ -29,9 +29,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IToolRegistry, ToolRegistry>();
         services.AddSingleton<IToolInvoker, RegistryBackedToolInvoker>();
         services.AddSingleton<IToolExecutionPipeline, ToolExecutionPipeline>();
+        services.AddSingleton<ITool, ApplyPatchTool>();
         services.AddSingleton<ITool, FileReadTool>();
-        services.AddSingleton<ITool, FileWriteTool>();
         services.AddSingleton<ITool, DirectoryListTool>();
+        services.AddSingleton<ITool, SearchFilesTool>();
+        services.AddSingleton<ITool, FileWriteTool>();
         services.AddSingleton<ITool, TextSearchTool>();
         services.AddSingleton<ITool, ShellCommandTool>();
         services.AddSingleton<IReplCommandHandler, ConfigCommandHandler>();
