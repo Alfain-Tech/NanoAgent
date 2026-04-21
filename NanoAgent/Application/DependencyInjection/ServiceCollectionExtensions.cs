@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, ApplyPatchTool>();
         services.AddSingleton<ITool, FileReadTool>();
         services.AddSingleton<ITool, DirectoryListTool>();
+        services.AddSingleton<ITool, PlanningModeTool>();
         services.AddSingleton<ITool, SearchFilesTool>();
         services.AddSingleton<ITool, FileWriteTool>();
         services.AddSingleton<ITool, TextSearchTool>();

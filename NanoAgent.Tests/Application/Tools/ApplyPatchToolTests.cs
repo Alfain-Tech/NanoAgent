@@ -65,6 +65,33 @@ public sealed class ApplyPatchToolTests
         transaction!.Description.Should().Be("apply_patch (1 file)");
     }
 
+    [Fact]
+    public async Task ExecuteAsync_Should_ReturnRetryGuidance_When_PatchFormatIsInvalid()
+    {
+        Mock<IWorkspaceFileService> workspaceFileService = new(MockBehavior.Strict);
+        workspaceFileService
+            .Setup(service => service.ApplyPatchWithTrackingAsync(
+                "*** Begin Patch\n*** Update File: README.md",
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new FormatException("Patch text must end with '*** End Patch'."));
+
+        ApplyPatchTool sut = new(workspaceFileService.Object);
+
+        ToolResult result = await sut.ExecuteAsync(
+            CreateContext("""{ "patch": "*** Begin Patch\n*** Update File: README.md" }"""),
+            CancellationToken.None);
+
+        result.Status.Should().Be(ToolResultStatus.InvalidArguments);
+        result.Message.Should().Contain("Patch text must end with '*** End Patch'.");
+        result.Message.Should().Contain("Call apply_patch again with corrected patch text.");
+        result.Message.Should().Contain("final non-empty line must be exactly '*** End Patch'");
+        result.JsonResult.Should().Contain("Call apply_patch again with corrected patch text.");
+        result.RenderPayload.Should().NotBeNull();
+        result.RenderPayload!.Title.Should().Be("Patch rejected");
+        result.RenderPayload.Text.Should().Contain("first non-empty line must be exactly '*** Begin Patch'");
+        result.RenderPayload.Text.Should().Contain("final non-empty line must be exactly '*** End Patch'");
+    }
+
     private static ToolExecutionContext CreateContext(
         string argumentsJson,
         ReplSessionContext? session = null)

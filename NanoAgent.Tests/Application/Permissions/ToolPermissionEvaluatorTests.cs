@@ -113,6 +113,27 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
     }
 
     [Fact]
+    public void Evaluate_Should_AllowToolchainCommands_When_CommandIsAllowlisted()
+    {
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                Shell = new ShellCommandPermissionPolicy
+                {
+                    CommandArgumentName = "command",
+                    AllowedCommands = ["dotnet", "npm", "python"]
+                }
+            },
+            new PermissionEvaluationContext(CreateContext("""{ "command": "npm test" }""")));
+
+        result.IsAllowed.Should().BeTrue();
+    }
+
+    [Fact]
     public void Evaluate_Should_Deny_When_ReadRuleMatchesDotEnvPattern()
     {
         ToolPermissionEvaluator sut = new(
@@ -286,6 +307,52 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
 
         result.Decision.Should().Be(PermissionEvaluationDecision.Denied);
         result.ReasonCode.Should().Be("planning_phase_shell_blocked");
+    }
+
+    [Fact]
+    public void Evaluate_Should_AllowSafeToolchainProbeShellCommands_When_PlanningModeIsActive()
+    {
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                Shell = new ShellCommandPermissionPolicy
+                {
+                    CommandArgumentName = "command",
+                    AllowedCommands = ["git", "rg"]
+                }
+            },
+            new PermissionEvaluationContext(CreateContext(
+                """{ "command": "python --version" }""",
+                executionPhase: ConversationExecutionPhase.Planning)));
+
+        result.IsAllowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_Should_AllowToolLookupShellCommands_When_PlanningModeIsActive()
+    {
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                Shell = new ShellCommandPermissionPolicy
+                {
+                    CommandArgumentName = "command",
+                    AllowedCommands = ["git", "rg"]
+                }
+            },
+            new PermissionEvaluationContext(CreateContext(
+                """{ "command": "where.exe dotnet" }""",
+                executionPhase: ConversationExecutionPhase.Planning)));
+
+        result.IsAllowed.Should().BeTrue();
     }
 
     public void Dispose()

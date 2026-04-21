@@ -6,38 +6,6 @@ namespace NanoAgent.Application.Planning;
 
 internal static class PlanningModePolicy
 {
-    private static readonly string[] PlanningOnlySignals =
-    [
-        "plan",
-        "planning mode",
-        "plan mode",
-        "make a plan",
-        "create a plan",
-        "give me a plan",
-        "outline a plan",
-        "help me plan",
-        "analyze",
-        "analyse",
-        "investigate",
-        "think through",
-        "read only",
-        "read-only"
-    ];
-
-    private static readonly string[] PlanningOnlyNoExecutionSignals =
-    [
-        "do not implement",
-        "don't implement",
-        "no implementation",
-        "no code changes",
-        "without making changes",
-        "without changing",
-        "do not edit",
-        "don't edit",
-        "do not write files",
-        "don't write files"
-    ];
-
     private static readonly string[] ExecutionApprovalSignals =
     [
         "continue",
@@ -58,28 +26,6 @@ internal static class PlanningModePolicy
         "approve",
         "yes"
     ];
-
-    private static readonly string[] ExplicitExecutionSignals =
-    [
-        "implement",
-        "execute",
-        "apply it",
-        "apply the plan",
-        "run it",
-        "run the plan",
-        "go ahead",
-        "proceed"
-    ];
-
-    private static readonly HashSet<string> VisibleToolNames = new(StringComparer.Ordinal)
-    {
-        AgentToolNames.DirectoryList,
-        AgentToolNames.FileRead,
-        AgentToolNames.SearchFiles,
-        AgentToolNames.TextSearch,
-        AgentToolNames.ShellCommand,
-        AgentToolNames.WebSearch
-    };
 
     private static readonly HashSet<string> SafeInspectionCommands = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -113,100 +59,79 @@ internal static class PlanningModePolicy
         "status"
     };
 
-    private const string PlanningInstructions =
-        """
-        You are NanoAgent in Planning Mode.
+    private static readonly HashSet<string> SafeEnvironmentProbeCommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "bash",
+        "bun",
+        "cargo",
+        "clang",
+        "clang++",
+        "cmake",
+        "composer",
+        "csc",
+        "deno",
+        "dotnet",
+        "gcc",
+        "g++",
+        "Get-Command",
+        "go",
+        "gradle",
+        "java",
+        "javac",
+        "kotlinc",
+        "make",
+        "msbuild",
+        "mvn",
+        "ninja",
+        "node",
+        "npm",
+        "npx",
+        "php",
+        "pip",
+        "pip3",
+        "pnpm",
+        "poetry",
+        "powershell",
+        "pwsh",
+        "py",
+        "pytest",
+        "python",
+        "python3",
+        "ruby",
+        "rustc",
+        "ruff",
+        "sh",
+        "swift",
+        "tsc",
+        "uv",
+        "uvx",
+        "where",
+        "which",
+        "yarn"
+    };
 
-        Your role is to think before acting. You are not here to implement immediately. You are here to understand the task, inspect the codebase, identify the right approach, and produce a high-quality execution plan.
-
-        Operating mode:
-        - Analyze first, act second.
-        - Do not write files.
-        - Do not apply patches.
-        - Do not make destructive changes.
-        - Do not pretend work is done unless it has actually been done.
-        - Prefer reading, searching, listing, and reasoning.
-
-        Primary goals:
-        1. Understand the user's objective precisely.
-        2. Inspect the relevant parts of the workspace before proposing changes.
-        3. Identify the minimum set of files, modules, commands, and risks involved.
-        4. Produce a clear, practical, step-by-step plan that an execution agent could follow.
-        5. Explicitly state uncertainties, assumptions, and blockers.
-        6. Stop short of implementation unless the user explicitly promotes the plan.
-
-        Behavior rules:
-        - Be skeptical of first impressions.
-        - Ground your plan in actual repo structure, not guesses.
-        - If code inspection is needed, inspect before planning.
-        - Prefer the smallest viable solution that satisfies the task.
-        - Distinguish facts from assumptions.
-        - If there are multiple valid approaches, compare them briefly and recommend one.
-        - Call out dangerous or high-impact steps.
-        - Flag missing information instead of inventing it.
-        - Keep plans actionable, not vague.
-
-        Tool usage rules:
-        - Allowed: read/search/list/inspect/status-type actions.
-        - Allowed: safe diagnostic shell commands for inspection.
-        - Not allowed: file writes, patching, destructive shell actions, or irreversible changes.
-        - If implementation would be required to continue, say so clearly and ask for promotion.
-
-        When responding to coding tasks, structure your answer like this:
-
-        Objective
-        - Restate the task in one or two sentences.
-
-        Current understanding
-        - What the code or repo appears to do.
-        - What parts are most likely relevant.
-        - What you verified versus what is still inferred.
-
-        Relevant files / areas
-        - List the files, modules, classes, commands, or subsystems likely involved.
-
-        Plan
-        1. Step one...
-        2. Step two...
-        3. Step three...
-
-        Risks / unknowns
-        - Edge cases
-        - Architectural risks
-        - Missing context
-        - Things that should be verified during execution
-
-        Recommended approach
-        - State the best path forward and why.
-
-        Promotion note
-        - State clearly that no edits will be made in Planning Mode.
-        - Tell the user that the plan can be promoted for implementation later.
-        - End in planning only. Do not execute the plan in this phase.
-
-        Quality bar:
-        - Plans should be specific enough that execution can begin with minimal ambiguity.
-        - Avoid generic advice.
-        - Avoid bloated plans with unnecessary steps.
-        - Prefer correctness, clarity, and realism over sounding impressive.
-
-        If the task is ambiguous, do the best possible inspection-based planning with the available context, then clearly mark the open questions.
-        """;
-
-    private const string ExecutionInstructions =
-        """
-        EXECUTION PHASE IS ACTIVE.
-        Use the approved implementation plan as your guide, but stay grounded in the repository state and adjust the approach if reality differs from the plan.
-        Execute the work step by step using the available tools when needed.
-        Make the smallest effective changes, validate when practical, and finish the user's requested work instead of stopping at analysis.
-        In the final response, include a concise task list or execution summary plus any remaining risks or verification gaps.
-        """;
+    private static readonly HashSet<string> SafeEnvironmentProbeArguments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--help",
+        "--info",
+        "--list-runtimes",
+        "--list-sdks",
+        "--version",
+        "-?",
+        "-h",
+        "-version",
+        "/?",
+        "/version",
+        "help",
+        "version"
+    };
 
     private const string ApprovedExecutionInstructions =
         """
         APPROVED EXECUTION PHASE IS ACTIVE.
         The user approved a previously saved plan for this section.
         Use the saved plan below as the baseline task list, but refine it if repo evidence requires a safer or smaller implementation.
+        Work through the task list one task at a time and keep the current active step explicit.
         Finish the requested work when practical instead of returning another plan.
         """;
 
@@ -214,7 +139,8 @@ internal static class PlanningModePolicy
         """
         Execution plan for the current request:
         - Use the approved plan below as the task list.
-        - Execute the work one step at a time using available tools when needed.
+        - Execute the work one task at a time using available tools when needed.
+        - Finish or deliberately revise the current task before moving to the next one.
         - Finish the requested work when practical.
         - In your final response, include:
           Objective
@@ -223,46 +149,43 @@ internal static class PlanningModePolicy
           Risks / unknowns
         """;
 
-    public static IReadOnlyList<ToolDefinition> FilterPlanningTools(
-        IReadOnlyList<ToolDefinition> toolDefinitions)
-    {
-        ArgumentNullException.ThrowIfNull(toolDefinitions);
+    private const string ToolDrivenPlanningInstructions =
+        """
+        Tool-driven planning:
+        - `planning_mode` is available as an optional tool when you want to inspect and think first.
+        - Use it for ambiguous, risky, multi-step, or unfamiliar work when the right implementation path is not yet clear.
+        - Before planning, gather repo evidence with read-only tools instead of guessing.
+        - When relevant, use `shell_command` to inspect the environment and check installed build tools, SDKs, compilers, package managers, or runtimes with safe probe commands such as `dotnet --info`, `python --version`, `node --version`, `gcc --version`, `where.exe dotnet`, or `Get-Command cmake`.
+        - During execution, use `shell_command` for real toolchain work when it materially advances the task: scaffold projects, restore or install dependencies, run code generation, build, test, lint, format, or inspect runtime behavior.
+        - Prefer repo-native validation commands such as `dotnet build`, `dotnet test`, `npm test`, `npm run build`, `python -m pytest`, `cargo test`, `go test ./...`, `mvn test`, or `gradle test` when those toolchains are present.
+        - A Codex-style plan should:
+          - restate the objective clearly
+          - separate verified facts from assumptions or open questions
+          - identify the relevant files, modules, commands, toolchains, or subsystems
+          - give a high-quality ordered task list with the immediate next step first
+          - include concrete validation commands and key risks
+          - recommend the best path when multiple approaches exist
+        - After planning, execute the resulting task list one task at a time instead of jumping across unfinished work.
+        - If the user asked only for a plan, respond with the plan and stop.
+        - Otherwise, after planning, continue execution in the same turn when practical.
+        - Do not wait for explicit plan approval unless the user asked you to stop after planning.
+        """;
 
-        return toolDefinitions
-            .Where(definition => VisibleToolNames.Contains(definition.Name))
-            .ToArray();
-    }
-
-    public static IReadOnlySet<string> GetPlanningToolNames()
+    public static string? CreateToolDrivenConversationSystemPrompt(string? basePrompt)
     {
-        return new HashSet<string>(VisibleToolNames, StringComparer.Ordinal);
-    }
-
-    public static string? CreatePlanningSystemPrompt(string? basePrompt)
-    {
-        return AppendInstructions(basePrompt, PlanningInstructions);
+        return AppendInstructions(basePrompt, ToolDrivenPlanningInstructions);
     }
 
     public static string? CreateExecutionSystemPrompt(
         string? basePrompt,
-        string? planningSummary,
-        bool isApprovedPlan = false)
-    {
-        string phaseInstructions = isApprovedPlan
-            ? ApprovedExecutionInstructions
-            : ExecutionInstructions;
-        string instructions = string.IsNullOrWhiteSpace(planningSummary)
-            ? phaseInstructions
-            : $"{phaseInstructions}{Environment.NewLine}{Environment.NewLine}{ExecutionPlanInstruction}{Environment.NewLine}{Environment.NewLine}{planningSummary.Trim()}";
-
-        return AppendInstructions(basePrompt, instructions);
-    }
-
-    public static string CreatePendingPlanResponse(string planningSummary)
+        string planningSummary)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(planningSummary);
 
-        return $"{planningSummary.Trim()}{Environment.NewLine}{Environment.NewLine}Plan status{Environment.NewLine}- No changes were made in planning mode.{Environment.NewLine}- This plan has been saved for the current section.{Environment.NewLine}- Say \"continue\" or \"go ahead\" to execute it, or send a new request to replace it.";
+        string instructions =
+            $"{ApprovedExecutionInstructions}{Environment.NewLine}{Environment.NewLine}{ExecutionPlanInstruction}{Environment.NewLine}{Environment.NewLine}{planningSummary.Trim()}";
+
+        return AppendInstructions(basePrompt, instructions);
     }
 
     public static bool IsExecutionApproval(string? userInput)
@@ -270,85 +193,13 @@ internal static class PlanningModePolicy
         return MatchesIntent(userInput, ExecutionApprovalSignals);
     }
 
-    public static bool ShouldStayInPlanningMode(string? userInput)
+    public static bool ShouldBypassShellAllowlistForPlanning(string commandText)
     {
-        string normalizedInput = NormalizeIntentText(userInput);
-        if (string.IsNullOrWhiteSpace(normalizedInput))
-        {
-            return false;
-        }
-
-        if (PlanningOnlyNoExecutionSignals.Any(signal => normalizedInput.Contains(signal, StringComparison.Ordinal)))
-        {
-            return true;
-        }
-
-        if (!PlanningOnlySignals.Any(signal => normalizedInput.Contains(signal, StringComparison.Ordinal)))
-        {
-            return false;
-        }
-
-        return !ExplicitExecutionSignals.Any(signal => normalizedInput.Contains(signal, StringComparison.Ordinal));
-    }
-
-    public static IReadOnlyList<string> ExtractPlanTasks(string planningSummary)
-    {
-        if (string.IsNullOrWhiteSpace(planningSummary))
-        {
-            return [];
-        }
-
-        string[] lines = planningSummary
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n', StringSplitOptions.None);
-
-        int planHeadingIndex = Array.FindIndex(
-            lines,
-            static line => string.Equals(line.Trim(), "Plan", StringComparison.OrdinalIgnoreCase));
-
-        List<string> tasks = [];
-        if (planHeadingIndex >= 0)
-        {
-            for (int index = planHeadingIndex + 1; index < lines.Length; index++)
-            {
-                string line = lines[index].Trim();
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    if (tasks.Count > 0)
-                    {
-                        break;
-                    }
-
-                    continue;
-                }
-
-                if (TryExtractStep(line, out string? task))
-                {
-                    tasks.Add(task);
-                    continue;
-                }
-
-                if (tasks.Count > 0)
-                {
-                    break;
-                }
-            }
-        }
-
-        if (tasks.Count > 0)
-        {
-            return tasks;
-        }
-
-        foreach (string rawLine in lines)
-        {
-            if (TryExtractStep(rawLine.Trim(), out string? task))
-            {
-                tasks.Add(task);
-            }
-        }
-
-        return tasks;
+        return TryGetPlanningShellCommandInfo(
+            commandText,
+            out string[] tokens,
+            out string commandName) &&
+               IsSafeEnvironmentProbeCommand(tokens, commandName);
     }
 
     public static PermissionEvaluationResult? EvaluateRestrictions(
@@ -433,24 +284,6 @@ internal static class PlanningModePolicy
             subjects ?? []);
     }
 
-    private static bool TryExtractStep(
-        string line,
-        out string task)
-    {
-        Match match = Regex.Match(
-            line,
-            @"^\s*(?:\d+[\.\)]|[-*])\s+(?<task>.+?)\s*$");
-
-        if (!match.Success)
-        {
-            task = string.Empty;
-            return false;
-        }
-
-        task = match.Groups["task"].Value.Trim();
-        return task.Length > 0;
-    }
-
     private static bool MatchesIntent(
         string? userInput,
         IReadOnlyList<string> signals)
@@ -484,30 +317,10 @@ internal static class PlanningModePolicy
         out string denialReason)
     {
         string normalizedCommand = commandText.Trim();
-        if (string.IsNullOrWhiteSpace(normalizedCommand))
-        {
-            denialReason =
-                "The automatic planning phase only allows non-empty inspection commands.";
-            return false;
-        }
-
-        if (ShellCommandText.ContainsControlSyntax(normalizedCommand))
-        {
-            denialReason =
-                $"The automatic planning phase only allows simple inspection commands. '{normalizedCommand}' is execution-only.";
-            return false;
-        }
-
-        string[] tokens = ShellCommandText.Tokenize(normalizedCommand);
-        if (tokens.Length == 0)
-        {
-            denialReason =
-                "The automatic planning phase only allows valid inspection commands.";
-            return false;
-        }
-
-        string commandName = ShellCommandText.NormalizeCommandToken(tokens[0]);
-        if (string.IsNullOrWhiteSpace(commandName))
+        if (!TryGetPlanningShellCommandInfo(
+                commandText,
+                out string[] tokens,
+                out string commandName))
         {
             denialReason =
                 "The automatic planning phase only allows valid inspection commands.";
@@ -515,6 +328,12 @@ internal static class PlanningModePolicy
         }
 
         if (SafeInspectionCommands.Contains(commandName))
+        {
+            denialReason = string.Empty;
+            return true;
+        }
+
+        if (IsSafeEnvironmentProbeCommand(tokens, commandName))
         {
             denialReason = string.Empty;
             return true;
@@ -536,6 +355,70 @@ internal static class PlanningModePolicy
         denialReason =
             $"The automatic planning phase only allows safe inspection commands. '{normalizedCommand}' is execution-only.";
         return false;
+    }
+
+    private static bool TryGetPlanningShellCommandInfo(
+        string commandText,
+        out string[] tokens,
+        out string commandName)
+    {
+        string normalizedCommand = commandText.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedCommand))
+        {
+            tokens = [];
+            commandName = string.Empty;
+            return false;
+        }
+
+        if (ShellCommandText.ContainsControlSyntax(normalizedCommand))
+        {
+            tokens = [];
+            commandName = string.Empty;
+            return false;
+        }
+
+        tokens = ShellCommandText.Tokenize(normalizedCommand);
+        if (tokens.Length == 0)
+        {
+            commandName = string.Empty;
+            return false;
+        }
+
+        commandName = ShellCommandText.NormalizeCommandToken(tokens[0]);
+        return !string.IsNullOrWhiteSpace(commandName);
+    }
+
+    private static bool IsSafeEnvironmentProbeCommand(
+        IReadOnlyList<string> tokens,
+        string commandName)
+    {
+        if (!SafeEnvironmentProbeCommands.Contains(commandName))
+        {
+            return false;
+        }
+
+        if (string.Equals(commandName, "where", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandName, "which", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandName, "Get-Command", StringComparison.OrdinalIgnoreCase))
+        {
+            return tokens.Count == 2 && IsSimpleCommandSubject(tokens[1]);
+        }
+
+        return tokens.Count == 2 &&
+               SafeEnvironmentProbeArguments.Contains(tokens[1]);
+    }
+
+    private static bool IsSimpleCommandSubject(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(
+            value,
+            @"^[A-Za-z0-9._+\-]+$",
+            RegexOptions.CultureInvariant);
     }
 
 }

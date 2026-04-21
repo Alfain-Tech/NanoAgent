@@ -428,6 +428,13 @@ internal sealed class ToolPermissionEvaluator : IPermissionEvaluator
                 $"Tool '{context.ToolName}' did not receive a valid shell command.");
         }
 
+        if (context.ExecutionPhase == ConversationExecutionPhase.Planning &&
+            PlanningModePolicy.ShouldBypassShellAllowlistForPlanning(commandText!))
+        {
+            subjects.Add(commandText!.Trim());
+            return PermissionEvaluationResult.Allowed();
+        }
+
         bool isAllowed = shellPolicy.AllowedCommands.Contains(
             commandName,
             StringComparer.OrdinalIgnoreCase);

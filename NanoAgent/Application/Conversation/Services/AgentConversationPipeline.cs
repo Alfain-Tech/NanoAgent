@@ -80,12 +80,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
 
         ConversationSettings settings = _configurationAccessor.GetSettings();
         IReadOnlyList<ToolDefinition> allToolDefinitions = _toolRegistry.GetToolDefinitions();
-        IReadOnlyList<ToolDefinition> planningToolDefinitions = PlanningModePolicy.FilterPlanningTools(
-            allToolDefinitions);
-        IReadOnlySet<string> planningToolNames = planningToolDefinitions
-            .Select(static definition => definition.Name)
-            .ToHashSet(StringComparer.Ordinal);
-        IReadOnlySet<string> executionToolNames = allToolDefinitions
+        IReadOnlySet<string> availableToolNames = allToolDefinitions
             .Select(static definition => definition.Name)
             .ToHashSet(StringComparer.Ordinal);
         using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -103,13 +98,13 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 settings,
                 apiKey,
                 allToolDefinitions,
-                executionToolNames,
+                availableToolNames,
                 timeoutSource,
                 startedAt,
                 cancellationToken);
         }
 
-        List<ConversationRequestMessage> planningMessages =
+        List<ConversationRequestMessage> messages =
         [
             .. session.GetConversationHistory(settings.MaxHistoryTurns),
             ConversationRequestMessage.User(normalizedInput)
@@ -120,123 +115,40 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             session.ProviderName,
             session.ActiveModelId);
 
-        PhaseExecutionResult planningResult = await RunPhaseAsync(
+        PhaseExecutionResult result = await RunPhaseAsync(
             apiKey,
             session,
-            planningMessages,
-            PlanningModePolicy.CreatePlanningSystemPrompt(settings.SystemPrompt),
-            planningToolDefinitions,
-            planningToolNames,
-            ConversationExecutionPhase.Planning,
+            messages,
+            PlanningModePolicy.CreateToolDrivenConversationSystemPrompt(settings.SystemPrompt),
+            allToolDefinitions,
+            availableToolNames,
+            ConversationExecutionPhase.Execution,
             progressSink,
             settings,
             timeoutSource,
             executionPlanTracker: null,
             cancellationToken);
 
-        if (planningResult.IsProviderEmptyResponseFallback)
-        {
-            if (PlanningModePolicy.ShouldStayInPlanningMode(normalizedInput))
-            {
-                return CreatePhaseResultTurnResult(
-                    startedAt,
-                    planningResult,
-                    CreateBatchResult(planningResult.ExecutedToolResults),
-                    GetCompletionTokens(planningResult));
-            }
-
-            planningResult = planningResult.WithAssistantMessage(
-                CreateFallbackPlanningSummary(normalizedInput));
-        }
-
-        ExecutionPlanTracker? executionPlanTracker = ExecutionPlanTracker.Create(
-            PlanningModePolicy.ExtractPlanTasks(planningResult.AssistantMessage));
-        if (executionPlanTracker is not null)
-        {
-            await progressSink.ReportExecutionPlanAsync(
-                executionPlanTracker.CreateSnapshot(),
-                cancellationToken);
-        }
-
-        if (PlanningModePolicy.ShouldStayInPlanningMode(normalizedInput))
-        {
-            session.SetPendingExecutionPlan(new PendingExecutionPlan(
-                normalizedInput,
-                planningResult.AssistantMessage,
-                PlanningModePolicy.ExtractPlanTasks(planningResult.AssistantMessage)));
-            session.AddConversationTurn(normalizedInput, planningResult.AssistantMessage);
-
-            string responseText = PlanningModePolicy.CreatePendingPlanResponse(planningResult.AssistantMessage);
-            ToolExecutionBatchResult? planningToolExecutionResult = CreateBatchResult(
-                planningResult.ExecutedToolResults);
-
-            return ConversationTurnResult.AssistantMessage(
-                responseText,
-                planningToolExecutionResult,
-                CreateMetrics(
-                    startedAt,
-                    responseText,
-                    planningResult.HasReportedCompletionTokens
-                        ? planningResult.TotalCompletionTokens
-                        : null));
-        }
-
-        List<ConversationRequestMessage> executionMessages =
-        [
-            .. planningResult.Messages,
-            ConversationRequestMessage.AssistantMessage(planningResult.AssistantMessage)
-        ];
-
-        PhaseExecutionResult executionResult = await RunPhaseAsync(
-            apiKey,
-            session,
-            executionMessages,
-            PlanningModePolicy.CreateExecutionSystemPrompt(
-                settings.SystemPrompt,
-                planningResult.AssistantMessage,
-                isApprovedPlan: false),
-            allToolDefinitions,
-            executionToolNames,
-            ConversationExecutionPhase.Execution,
-            progressSink,
-            settings,
-            timeoutSource,
-            executionPlanTracker,
-            cancellationToken);
-
-        if (executionResult.IsProviderEmptyResponseFallback)
+        if (result.IsProviderEmptyResponseFallback)
         {
             return CreatePhaseResultTurnResult(
                 startedAt,
-                executionResult,
-                CombineToolExecutionResults(
-                    planningResult.ExecutedToolResults,
-                    executionResult.ExecutedToolResults),
-                CombineCompletionTokens(planningResult, executionResult));
-        }
-
-        if (executionPlanTracker is not null)
-        {
-            await progressSink.ReportExecutionPlanAsync(
-                executionPlanTracker.Complete(),
-                cancellationToken);
+                result,
+                CreateBatchResult(result.ExecutedToolResults),
+                GetCompletionTokens(result));
         }
 
         ApplicationLogMessages.ConversationAssistantMessageReceived(_logger);
         session.ClearPendingExecutionPlan();
-        session.AddConversationTurn(normalizedInput, executionResult.AssistantMessage);
-
-        ToolExecutionBatchResult? toolExecutionResult = CombineToolExecutionResults(
-            planningResult.ExecutedToolResults,
-            executionResult.ExecutedToolResults);
+        session.AddConversationTurn(normalizedInput, result.AssistantMessage);
 
         return ConversationTurnResult.AssistantMessage(
-            executionResult.AssistantMessage,
-            toolExecutionResult,
+            result.AssistantMessage,
+            CreateBatchResult(result.ExecutedToolResults),
             CreateMetrics(
                 startedAt,
-                executionResult.AssistantMessage,
-                CombineCompletionTokens(planningResult, executionResult)));
+                result.AssistantMessage,
+                GetCompletionTokens(result)));
     }
 
     private async Task<ConversationTurnResult> ExecuteApprovedPlanAsync(
@@ -275,8 +187,7 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             executionMessages,
             PlanningModePolicy.CreateExecutionSystemPrompt(
                 settings.SystemPrompt,
-                pendingPlan.PlanningSummary,
-                isApprovedPlan: true),
+                pendingPlan.PlanningSummary),
             allToolDefinitions,
             executionToolNames,
             ConversationExecutionPhase.Execution,
@@ -349,34 +260,10 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             : $"{systemPrompt.Trim()}{Environment.NewLine}{Environment.NewLine}{EmptyResponseRetryInstruction}";
     }
 
-    private static string CreateFallbackPlanningSummary(string normalizedInput)
-    {
-        return $"""
-            Objective
-            - {normalizedInput}
-
-            Plan
-            1. Complete the user's request using the available tools.
-            2. Validate the result when practical.
-
-            Risks / unknowns
-            - The provider returned an empty planning response, so this minimal plan was synthesized by NanoAgent.
-            """;
-    }
-
     private static int? GetCompletionTokens(PhaseExecutionResult phaseResult)
     {
         return phaseResult.HasReportedCompletionTokens
             ? phaseResult.TotalCompletionTokens
-            : null;
-    }
-
-    private static int? CombineCompletionTokens(
-        PhaseExecutionResult first,
-        PhaseExecutionResult second)
-    {
-        return first.HasReportedCompletionTokens || second.HasReportedCompletionTokens
-            ? first.TotalCompletionTokens + second.TotalCompletionTokens
             : null;
     }
 
@@ -439,7 +326,6 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             if (response is null)
             {
                 return CreateEmptyResponseFallback(
-                    messages,
                     executedToolResults,
                     totalCompletionTokens,
                     hasReportedCompletionTokens);
@@ -505,7 +391,6 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
 
             return new PhaseExecutionResult(
                 response.AssistantMessage,
-                messages,
                 executedToolResults,
                 totalCompletionTokens,
                 hasReportedCompletionTokens);
@@ -612,38 +497,16 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
     }
 
     private static PhaseExecutionResult CreateEmptyResponseFallback(
-        IReadOnlyList<ConversationRequestMessage> messages,
         IReadOnlyList<ToolInvocationResult> executedToolResults,
         int totalCompletionTokens,
         bool hasReportedCompletionTokens)
     {
         return new PhaseExecutionResult(
             EmptyResponseFallbackMessage,
-            messages,
             executedToolResults,
             totalCompletionTokens,
             hasReportedCompletionTokens,
             isProviderEmptyResponseFallback: true);
-    }
-
-    private static ToolExecutionBatchResult? CombineToolExecutionResults(
-        IReadOnlyList<ToolInvocationResult> planningResults,
-        IReadOnlyList<ToolInvocationResult> executionResults)
-    {
-        List<ToolInvocationResult> results = [];
-        if (planningResults.Count > 0)
-        {
-            results.AddRange(planningResults);
-        }
-
-        if (executionResults.Count > 0)
-        {
-            results.AddRange(executionResults);
-        }
-
-        return results.Count == 0
-            ? null
-            : new ToolExecutionBatchResult(results);
     }
 
     private static ToolExecutionBatchResult? CreateBatchResult(
@@ -733,18 +596,15 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
     {
         public PhaseExecutionResult(
             string assistantMessage,
-            IReadOnlyList<ConversationRequestMessage> messages,
             IReadOnlyList<ToolInvocationResult> executedToolResults,
             int totalCompletionTokens,
             bool hasReportedCompletionTokens,
             bool isProviderEmptyResponseFallback = false)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(assistantMessage);
-            ArgumentNullException.ThrowIfNull(messages);
             ArgumentNullException.ThrowIfNull(executedToolResults);
 
             AssistantMessage = assistantMessage.Trim();
-            Messages = messages.ToArray();
             ExecutedToolResults = executedToolResults.ToArray();
             TotalCompletionTokens = totalCompletionTokens;
             HasReportedCompletionTokens = hasReportedCompletionTokens;
@@ -759,18 +619,6 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
 
         public bool IsProviderEmptyResponseFallback { get; }
 
-        public IReadOnlyList<ConversationRequestMessage> Messages { get; }
-
         public int TotalCompletionTokens { get; }
-
-        public PhaseExecutionResult WithAssistantMessage(string assistantMessage)
-        {
-            return new PhaseExecutionResult(
-                assistantMessage,
-                Messages,
-                ExecutedToolResults,
-                TotalCompletionTokens,
-                HasReportedCompletionTokens);
-        }
     }
 }

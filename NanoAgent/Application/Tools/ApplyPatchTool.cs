@@ -14,7 +14,7 @@ internal sealed class ApplyPatchTool : ITool
         _workspaceFileService = workspaceFileService;
     }
 
-    public string Description => "Apply a focused multi-file patch within the current workspace.";
+    public string Description => "Apply a focused multi-file patch within the current workspace. Patch text must start with *** Begin Patch and end with *** End Patch.";
 
     public string Name => AgentToolNames.ApplyPatch;
 
@@ -36,7 +36,7 @@ internal sealed class ApplyPatchTool : ITool
           "properties": {
             "patch": {
               "type": "string",
-              "description": "Patch text using the apply_patch format with *** Begin Patch / *** End Patch markers."
+              "description": "Patch text using the apply_patch format. The first non-empty line must be exactly *** Begin Patch and the final non-empty line must be exactly *** End Patch."
             }
           },
           "required": ["patch"],
@@ -70,12 +70,13 @@ internal sealed class ApplyPatchTool : ITool
         }
         catch (FormatException exception)
         {
+            string repairGuidance = BuildPatchRepairGuidance(exception.Message);
             return ToolResultFactory.InvalidArguments(
                 "invalid_patch",
-                exception.Message,
+                repairGuidance,
                 new ToolRenderPayload(
                     "Patch rejected",
-                    exception.Message));
+                    repairGuidance));
         }
         if (executionResult.EditTransaction is not null)
         {
@@ -99,6 +100,18 @@ internal sealed class ApplyPatchTool : ITool
             new ToolRenderPayload(
                 $"Applied patch ({result.FileCount} {(result.FileCount == 1 ? "file" : "files")})",
                 renderText));
+    }
+
+    private static string BuildPatchRepairGuidance(string parserMessage)
+    {
+        string normalizedMessage = string.IsNullOrWhiteSpace(parserMessage)
+            ? "Patch text is not valid apply_patch format."
+            : parserMessage.Trim();
+
+        return
+            $"{normalizedMessage} " +
+            "Call apply_patch again with corrected patch text. " +
+            "The patch argument must include the complete intended patch, its first non-empty line must be exactly '*** Begin Patch', and its final non-empty line must be exactly '*** End Patch'.";
     }
 
 }
