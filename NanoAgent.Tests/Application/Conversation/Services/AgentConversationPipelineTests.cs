@@ -85,7 +85,7 @@ public sealed class AgentConversationPipelineTests
             configurationAccessor.Object);
 
         ConversationTurnResult result = await sut.ProcessAsync(
-            "Plan the next refactor.",
+            "Implement the next refactor.",
             session,
             CancellationToken.None);
 
@@ -99,7 +99,7 @@ public sealed class AgentConversationPipelineTests
             .Should()
             .Equal("file_read", "shell_command");
         requests[1].SystemPrompt.Should().Contain("Base prompt");
-        requests[1].SystemPrompt.Should().Contain("AUTOMATIC EXECUTION PHASE IS ACTIVE.");
+        requests[1].SystemPrompt.Should().Contain("EXECUTION PHASE IS ACTIVE.");
         requests[1].SystemPrompt.Should().Contain("Execution plan for the current request:");
         requests[1].SystemPrompt.Should().Contain("1. Inspect the affected files.");
         requests[1].AvailableTools.Select(static tool => tool.Name)
@@ -107,12 +107,203 @@ public sealed class AgentConversationPipelineTests
             .Equal("file_read", "file_write", "shell_command");
         requests[1].Messages.Should().HaveCount(2);
         requests[1].Messages[0].Role.Should().Be("user");
-        requests[1].Messages[0].Content.Should().Be("Plan the next refactor.");
+        requests[1].Messages[0].Content.Should().Be("Implement the next refactor.");
         requests[1].Messages[1].Role.Should().Be("assistant");
         requests[1].Messages[1].Content.Should().Contain("Plan");
         session.ConversationHistory.Should().HaveCount(2);
-        session.ConversationHistory[0].Content.Should().Be("Plan the next refactor.");
+        session.ConversationHistory[0].Content.Should().Be("Implement the next refactor.");
         session.ConversationHistory[1].Content.Should().Be("Implemented the refactor.");
+        session.PendingExecutionPlan.Should().BeNull();
+        toolExecutionPipeline.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Should_SavePlanWithoutExecuting_When_UserRequestsPlanningOnly()
+    {
+        ReplSessionContext session = CreateSession();
+        Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
+        secretStore
+            .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("test-key");
+
+        Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
+        configurationAccessor
+            .Setup(accessor => accessor.GetSettings())
+            .Returns(CreateSettings("Base prompt"));
+
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([
+                CreateToolDefinition("file_read"),
+                CreateToolDefinition("file_write"),
+                CreateToolDefinition("shell_command")
+            ]);
+
+        List<ConversationProviderRequest> requests = [];
+        Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
+        providerClient
+            .Setup(client => client.SendAsync(
+                It.IsAny<ConversationProviderRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ConversationProviderRequest, CancellationToken>((request, _) =>
+            {
+                requests.Add(request);
+                return Task.FromResult(new ConversationProviderPayload(
+                    ProviderKind.OpenAiCompatible,
+                    """{ "choices": [] }""",
+                    "resp_1"));
+            });
+
+        Mock<IConversationResponseMapper> responseMapper = new(MockBehavior.Strict);
+        responseMapper
+            .Setup(mapper => mapper.Map(It.IsAny<ConversationProviderPayload>()))
+            .Returns(new ConversationResponse(
+                """
+                Objective
+                - Plan the refactor first.
+
+                Plan
+                1. Inspect the affected files.
+                2. Apply the refactor.
+                3. Run validation.
+                """,
+                [],
+                "resp_1"));
+
+        Mock<IToolExecutionPipeline> toolExecutionPipeline = new(MockBehavior.Strict);
+
+        AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
+            secretStore.Object,
+            providerClient.Object,
+            responseMapper.Object,
+            toolExecutionPipeline.Object,
+            toolRegistry.Object,
+            configurationAccessor.Object);
+
+        ConversationTurnResult result = await sut.ProcessAsync(
+            "Help me plan this refactor",
+            session,
+            CancellationToken.None);
+
+        result.ResponseText.Should().Contain("Plan status");
+        result.ResponseText.Should().Contain("saved for the current section");
+        requests.Should().HaveCount(1);
+        requests[0].SystemPrompt.Should().Contain("You are NanoAgent in Planning Mode.");
+        requests[0].AvailableTools.Select(static tool => tool.Name)
+            .Should()
+            .Equal("file_read", "shell_command");
+        session.PendingExecutionPlan.Should().NotBeNull();
+        session.PendingExecutionPlan!.SourceUserInput.Should().Be("Help me plan this refactor");
+        session.PendingExecutionPlan.Tasks.Should().Equal(
+            "Inspect the affected files.",
+            "Apply the refactor.",
+            "Run validation.");
+        session.ConversationHistory.Should().HaveCount(2);
+        session.ConversationHistory[0].Content.Should().Be("Help me plan this refactor");
+        session.ConversationHistory[1].Content.Should().Contain("Plan");
+        session.ConversationHistory[1].Content.Should().NotContain("Plan status");
+        toolExecutionPipeline.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Should_ExecuteSavedPlan_When_UserApprovesPendingPlan()
+    {
+        ReplSessionContext session = CreateSession();
+        const string planningSummary =
+            """
+            Objective
+            - Plan the refactor first.
+
+            Plan
+            1. Inspect the affected files.
+            2. Apply the refactor.
+            3. Run validation.
+            """;
+
+        session.AddConversationTurn("Help me plan this refactor", planningSummary);
+        session.SetPendingExecutionPlan(new PendingExecutionPlan(
+            "Help me plan this refactor",
+            planningSummary,
+            [
+                "Inspect the affected files.",
+                "Apply the refactor.",
+                "Run validation."
+            ]));
+
+        Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
+        secretStore
+            .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("test-key");
+
+        Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
+        configurationAccessor
+            .Setup(accessor => accessor.GetSettings())
+            .Returns(CreateSettings("Base prompt"));
+
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([
+                CreateToolDefinition("file_read"),
+                CreateToolDefinition("file_write"),
+                CreateToolDefinition("shell_command")
+            ]);
+
+        List<ConversationProviderRequest> requests = [];
+        Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
+        providerClient
+            .Setup(client => client.SendAsync(
+                It.IsAny<ConversationProviderRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ConversationProviderRequest, CancellationToken>((request, _) =>
+            {
+                requests.Add(request);
+                return Task.FromResult(new ConversationProviderPayload(
+                    ProviderKind.OpenAiCompatible,
+                    """{ "choices": [] }""",
+                    "resp_exec"));
+            });
+
+        Mock<IConversationResponseMapper> responseMapper = new(MockBehavior.Strict);
+        responseMapper
+            .Setup(mapper => mapper.Map(It.IsAny<ConversationProviderPayload>()))
+            .Returns(new ConversationResponse(
+                "Implemented the approved plan.",
+                [],
+                "resp_exec"));
+
+        Mock<IToolExecutionPipeline> toolExecutionPipeline = new(MockBehavior.Strict);
+
+        AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
+            secretStore.Object,
+            providerClient.Object,
+            responseMapper.Object,
+            toolExecutionPipeline.Object,
+            toolRegistry.Object,
+            configurationAccessor.Object);
+
+        ConversationTurnResult result = await sut.ProcessAsync(
+            "continue",
+            session,
+            CancellationToken.None);
+
+        result.ResponseText.Should().Be("Implemented the approved plan.");
+        requests.Should().HaveCount(1);
+        requests[0].SystemPrompt.Should().Contain("APPROVED EXECUTION PHASE IS ACTIVE.");
+        requests[0].SystemPrompt.Should().Contain("1. Inspect the affected files.");
+        requests[0].Messages.Should().HaveCount(3);
+        requests[0].Messages[0].Content.Should().Be("Help me plan this refactor");
+        requests[0].Messages[1].Content.Should().Be(planningSummary);
+        requests[0].Messages[2].Content.Should().Be("continue");
+        session.PendingExecutionPlan.Should().BeNull();
+        session.ConversationHistory.Should().HaveCount(4);
+        session.ConversationHistory[2].Content.Should().Be("continue");
+        session.ConversationHistory[3].Content.Should().Be("Implemented the approved plan.");
         toolExecutionPipeline.VerifyNoOtherCalls();
     }
 
@@ -249,7 +440,7 @@ public sealed class AgentConversationPipelineTests
             .Equal("directory_list", "file_write");
         progressSink.PlanProgressUpdates.Select(static update => update.CompletedTaskCount)
             .Should()
-            .Equal(0, 1);
+            .Equal(0, 1, 3);
         progressSink.PlanProgressUpdates[0].Tasks.Should().Equal(
             "Inspect the workspace.",
             "Update the README.",

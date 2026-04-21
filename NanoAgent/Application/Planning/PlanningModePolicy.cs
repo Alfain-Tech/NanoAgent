@@ -7,6 +7,71 @@ namespace NanoAgent.Application.Planning;
 
 internal static class PlanningModePolicy
 {
+    private static readonly string[] PlanningOnlySignals =
+    [
+        "plan",
+        "planning mode",
+        "plan mode",
+        "make a plan",
+        "create a plan",
+        "give me a plan",
+        "outline a plan",
+        "help me plan",
+        "analyze",
+        "analyse",
+        "investigate",
+        "think through",
+        "read only",
+        "read-only"
+    ];
+
+    private static readonly string[] PlanningOnlyNoExecutionSignals =
+    [
+        "do not implement",
+        "don't implement",
+        "no implementation",
+        "no code changes",
+        "without making changes",
+        "without changing",
+        "do not edit",
+        "don't edit",
+        "do not write files",
+        "don't write files"
+    ];
+
+    private static readonly string[] ExecutionApprovalSignals =
+    [
+        "continue",
+        "continue with the plan",
+        "go ahead",
+        "go ahead with the plan",
+        "proceed",
+        "proceed with the plan",
+        "execute",
+        "execute the plan",
+        "implement it",
+        "implement the plan",
+        "apply it",
+        "apply the plan",
+        "run it",
+        "run the plan",
+        "approved",
+        "approve",
+        "yes"
+    ];
+
+    private static readonly string[] ExplicitExecutionSignals =
+    [
+        "implement",
+        "execute",
+        "apply it",
+        "apply the plan",
+        "run it",
+        "run the plan",
+        "go ahead",
+        "proceed"
+    ];
+
     private static readonly HashSet<string> VisibleToolNames = new(StringComparer.Ordinal)
     {
         AgentToolNames.DirectoryList,
@@ -117,7 +182,8 @@ internal static class PlanningModePolicy
 
         Promotion note
         - State clearly that no edits will be made in Planning Mode.
-        - Tell the user that the plan can be promoted for implementation.
+        - Tell the user that the plan can be promoted for implementation later.
+        - End in planning only. Do not execute the plan in this phase.
 
         Quality bar:
         - Plans should be specific enough that execution can begin with minimal ambiguity.
@@ -130,11 +196,19 @@ internal static class PlanningModePolicy
 
     private const string ExecutionInstructions =
         """
-        AUTOMATIC EXECUTION PHASE IS ACTIVE.
-        The planning phase for the current request has completed and the plan is now promoted for implementation.
-        Execute the task list step by step using the available tools when needed.
+        EXECUTION PHASE IS ACTIVE.
+        Use the approved implementation plan as your guide, but stay grounded in the repository state and adjust the approach if reality differs from the plan.
+        Execute the work step by step using the available tools when needed.
         Make the smallest effective changes, validate when practical, and finish the user's requested work instead of stopping at analysis.
         In the final response, include a concise task list or execution summary plus any remaining risks or verification gaps.
+        """;
+
+    private const string ApprovedExecutionInstructions =
+        """
+        APPROVED EXECUTION PHASE IS ACTIVE.
+        The user approved a previously saved plan for this section.
+        Use the saved plan below as the baseline task list, but refine it if repo evidence requires a safer or smaller implementation.
+        Finish the requested work when practical instead of returning another plan.
         """;
 
     private const string ExecutionPlanInstruction =
@@ -172,13 +246,50 @@ internal static class PlanningModePolicy
 
     public static string? CreateExecutionSystemPrompt(
         string? basePrompt,
-        string? planningSummary)
+        string? planningSummary,
+        bool isApprovedPlan = false)
     {
+        string phaseInstructions = isApprovedPlan
+            ? ApprovedExecutionInstructions
+            : ExecutionInstructions;
         string instructions = string.IsNullOrWhiteSpace(planningSummary)
-            ? ExecutionInstructions
-            : $"{ExecutionInstructions}{Environment.NewLine}{Environment.NewLine}{ExecutionPlanInstruction}{Environment.NewLine}{Environment.NewLine}{planningSummary.Trim()}";
+            ? phaseInstructions
+            : $"{phaseInstructions}{Environment.NewLine}{Environment.NewLine}{ExecutionPlanInstruction}{Environment.NewLine}{Environment.NewLine}{planningSummary.Trim()}";
 
         return AppendInstructions(basePrompt, instructions);
+    }
+
+    public static string CreatePendingPlanResponse(string planningSummary)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planningSummary);
+
+        return $"{planningSummary.Trim()}{Environment.NewLine}{Environment.NewLine}Plan status{Environment.NewLine}- No changes were made in planning mode.{Environment.NewLine}- This plan has been saved for the current section.{Environment.NewLine}- Say \"continue\" or \"go ahead\" to execute it, or send a new request to replace it.";
+    }
+
+    public static bool IsExecutionApproval(string? userInput)
+    {
+        return MatchesIntent(userInput, ExecutionApprovalSignals);
+    }
+
+    public static bool ShouldStayInPlanningMode(string? userInput)
+    {
+        string normalizedInput = NormalizeIntentText(userInput);
+        if (string.IsNullOrWhiteSpace(normalizedInput))
+        {
+            return false;
+        }
+
+        if (PlanningOnlyNoExecutionSignals.Any(signal => normalizedInput.Contains(signal, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        if (!PlanningOnlySignals.Any(signal => normalizedInput.Contains(signal, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        return !ExplicitExecutionSignals.Any(signal => normalizedInput.Contains(signal, StringComparison.Ordinal));
     }
 
     public static IReadOnlyList<string> ExtractPlanTasks(string planningSummary)
@@ -355,6 +466,34 @@ internal static class PlanningModePolicy
 
         task = match.Groups["task"].Value.Trim();
         return task.Length > 0;
+    }
+
+    private static bool MatchesIntent(
+        string? userInput,
+        IReadOnlyList<string> signals)
+    {
+        string normalizedInput = NormalizeIntentText(userInput);
+        if (string.IsNullOrWhiteSpace(normalizedInput))
+        {
+            return false;
+        }
+
+        return signals.Any(signal => normalizedInput.Equals(signal, StringComparison.Ordinal) ||
+                                     normalizedInput.StartsWith(signal + " ", StringComparison.Ordinal));
+    }
+
+    private static string NormalizeIntentText(string? userInput)
+    {
+        if (string.IsNullOrWhiteSpace(userInput))
+        {
+            return string.Empty;
+        }
+
+        return Regex.Replace(
+                userInput.Trim().ToLowerInvariant(),
+                @"[^a-z0-9]+",
+                " ")
+            .Trim();
     }
 
     private static bool IsSafePlanningShellCommand(

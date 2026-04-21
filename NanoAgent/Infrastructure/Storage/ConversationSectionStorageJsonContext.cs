@@ -10,6 +10,7 @@ namespace NanoAgent.Infrastructure.Storage;
     WriteIndented = true)]
 [JsonSerializable(typeof(ConversationSectionSnapshot))]
 [JsonSerializable(typeof(ConversationSectionTurn))]
+[JsonSerializable(typeof(PendingExecutionPlan))]
 [JsonSerializable(typeof(AgentProviderProfile))]
 internal sealed partial class ConversationSectionStorageJsonContext : JsonSerializerContext
 {

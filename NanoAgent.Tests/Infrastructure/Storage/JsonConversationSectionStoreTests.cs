@@ -33,7 +33,11 @@ public sealed class JsonConversationSectionStoreTests : IDisposable
             "gpt-5-mini",
             ["gpt-5-mini", "gpt-4.1"],
             [new ConversationSectionTurn("build a todo app", "I created the scaffold.")],
-            27);
+            27,
+            new PendingExecutionPlan(
+                "plan the todo app",
+                "Plan\n1. Inspect\n2. Implement\n3. Validate",
+                ["Inspect", "Implement", "Validate"]));
 
         await sut.SaveAsync(snapshot, CancellationToken.None);
         ConversationSectionSnapshot? loadedSnapshot = await sut.LoadAsync(snapshot.SectionId, CancellationToken.None);
@@ -48,6 +52,9 @@ public sealed class JsonConversationSectionStoreTests : IDisposable
         loadedSnapshot.Turns[0].UserInput.Should().Be("build a todo app");
         loadedSnapshot.Turns[0].AssistantResponse.Should().Be("I created the scaffold.");
         loadedSnapshot.TotalEstimatedOutputTokens.Should().Be(27);
+        loadedSnapshot.PendingExecutionPlan.Should().NotBeNull();
+        loadedSnapshot.PendingExecutionPlan!.SourceUserInput.Should().Be("plan the todo app");
+        loadedSnapshot.PendingExecutionPlan.Tasks.Should().Equal("Inspect", "Implement", "Validate");
     }
 
     public void Dispose()

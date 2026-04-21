@@ -76,6 +76,28 @@ public sealed class ReplSessionContextTests
         pendingUndo.AfterStates.Select(static state => state.Path).Should().Equal("README.md", "src/App.js");
     }
 
+    [Fact]
+    public void SetPendingExecutionPlan_Should_ExposePendingPlan_And_ClearShouldRemoveIt()
+    {
+        ReplSessionContext session = CreateSession();
+        PendingExecutionPlan pendingPlan = new(
+            "plan the refactor",
+            "Plan\n1. Inspect\n2. Edit\n3. Validate",
+            ["Inspect", "Edit", "Validate"]);
+
+        session.SetPendingExecutionPlan(pendingPlan);
+
+        session.HasPendingExecutionPlan.Should().BeTrue();
+        session.PendingExecutionPlan.Should().NotBeNull();
+        session.PendingExecutionPlan!.PlanningSummary.Should().Contain("Plan");
+        session.PendingExecutionPlan.Tasks.Should().Equal("Inspect", "Edit", "Validate");
+
+        session.ClearPendingExecutionPlan();
+
+        session.HasPendingExecutionPlan.Should().BeFalse();
+        session.PendingExecutionPlan.Should().BeNull();
+    }
+
     private static ReplSessionContext CreateSession()
     {
         return new ReplSessionContext(

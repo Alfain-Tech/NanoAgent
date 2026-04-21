@@ -102,7 +102,11 @@ public sealed class ReplSectionServiceTests
             "gpt-5-mini",
             ["gpt-5-mini", "gpt-4.1"],
             [new ConversationSectionTurn("first prompt", "first reply")],
-            19);
+            19,
+            new PendingExecutionPlan(
+                "plan the todo app",
+                "Plan\n1. Inspect\n2. Implement\n3. Validate",
+                ["Inspect", "Implement", "Validate"]));
 
         Mock<IConversationSectionStore> sectionStore = new(MockBehavior.Strict);
         sectionStore
@@ -135,6 +139,8 @@ public sealed class ReplSectionServiceTests
         session.ConversationHistory.Should().HaveCount(2);
         session.ConversationHistory[0].Content.Should().Be("first prompt");
         session.ConversationHistory[1].Content.Should().Be("first reply");
+        session.PendingExecutionPlan.Should().NotBeNull();
+        session.PendingExecutionPlan!.Tasks.Should().Equal("Inspect", "Implement", "Validate");
     }
 
     private sealed class FixedTimeProvider : TimeProvider

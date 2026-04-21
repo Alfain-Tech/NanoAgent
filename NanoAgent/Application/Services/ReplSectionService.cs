@@ -129,6 +129,7 @@ internal sealed class ReplSectionService : IReplSectionService
             snapshot.UpdatedAtUtc,
             snapshot.TotalEstimatedOutputTokens,
             snapshot.Turns,
+            snapshot.PendingExecutionPlan,
             isResumedSection: true);
 
         if (!session.HasGeneratedSectionTitle &&

@@ -13,7 +13,8 @@ public sealed class ConversationSectionSnapshot
         string activeModelId,
         IReadOnlyList<string> availableModelIds,
         IReadOnlyList<ConversationSectionTurn> turns,
-        int totalEstimatedOutputTokens)
+        int totalEstimatedOutputTokens,
+        PendingExecutionPlan? pendingExecutionPlan = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sectionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -55,6 +56,7 @@ public sealed class ConversationSectionSnapshot
             .Where(static turn => turn is not null)
             .ToArray();
         UpdatedAtUtc = updatedAtUtc;
+        PendingExecutionPlan = pendingExecutionPlan;
     }
 
     public string ActiveModelId { get; }
@@ -64,6 +66,8 @@ public sealed class ConversationSectionSnapshot
     public DateTimeOffset CreatedAtUtc { get; }
 
     public AgentProviderProfile ProviderProfile { get; }
+
+    public PendingExecutionPlan? PendingExecutionPlan { get; }
 
     public string SectionId { get; }
 

@@ -33,6 +33,7 @@ public sealed class ReplSessionContext
         DateTimeOffset? sectionUpdatedAtUtc = null,
         int totalEstimatedOutputTokens = 0,
         IReadOnlyList<ConversationSectionTurn>? conversationTurns = null,
+        PendingExecutionPlan? pendingExecutionPlan = null,
         bool isResumedSection = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationName);
@@ -77,6 +78,7 @@ public sealed class ReplSessionContext
         SectionUpdatedAtUtc = sectionUpdatedAtUtc ?? SectionCreatedAtUtc;
         TotalEstimatedOutputTokens = totalEstimatedOutputTokens;
         IsResumedSection = isResumedSection;
+        PendingExecutionPlan = pendingExecutionPlan;
 
         if (SectionUpdatedAtUtc < SectionCreatedAtUtc)
         {
@@ -112,7 +114,11 @@ public sealed class ReplSessionContext
 
     public bool IsResumedSection { get; }
 
+    public bool HasPendingExecutionPlan => PendingExecutionPlan is not null;
+
     public IReadOnlyList<ConversationRequestMessage> ConversationHistory => _conversationHistory;
+
+    public PendingExecutionPlan? PendingExecutionPlan { get; private set; }
 
     public IReadOnlyList<PermissionRule> PermissionOverrides => _permissionOverrides;
 
@@ -143,6 +149,17 @@ public sealed class ReplSessionContext
     {
         ArgumentNullException.ThrowIfNull(rule);
         _permissionOverrides.Add(rule);
+    }
+
+    public void ClearPendingExecutionPlan()
+    {
+        if (PendingExecutionPlan is null)
+        {
+            return;
+        }
+
+        PendingExecutionPlan = null;
+        IsPersistedStateDirty = true;
     }
 
     public bool ContainsModel(string modelId)
@@ -238,7 +255,8 @@ public sealed class ReplSessionContext
             ActiveModelId,
             AvailableModelIds,
             turns,
-            TotalEstimatedOutputTokens);
+            TotalEstimatedOutputTokens,
+            PendingExecutionPlan);
     }
 
     public IReadOnlyList<ConversationRequestMessage> GetConversationHistory(int maxHistoryTurns)
@@ -328,6 +346,22 @@ public sealed class ReplSessionContext
 
         SectionUpdatedAtUtc = updatedAtUtc;
         IsPersistedStateDirty = false;
+    }
+
+    public void SetPendingExecutionPlan(PendingExecutionPlan pendingExecutionPlan)
+    {
+        ArgumentNullException.ThrowIfNull(pendingExecutionPlan);
+
+        if (PendingExecutionPlan is not null &&
+            string.Equals(PendingExecutionPlan.SourceUserInput, pendingExecutionPlan.SourceUserInput, StringComparison.Ordinal) &&
+            string.Equals(PendingExecutionPlan.PlanningSummary, pendingExecutionPlan.PlanningSummary, StringComparison.Ordinal) &&
+            PendingExecutionPlan.Tasks.SequenceEqual(pendingExecutionPlan.Tasks, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        PendingExecutionPlan = pendingExecutionPlan;
+        IsPersistedStateDirty = true;
     }
 
     public void RenameSection(

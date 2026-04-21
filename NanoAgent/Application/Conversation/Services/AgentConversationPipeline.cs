@@ -84,6 +84,23 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         timeoutSource.CancelAfter(settings.RequestTimeout);
         DateTimeOffset startedAt = _timeProvider.GetUtcNow();
         string normalizedInput = input.Trim();
+
+        if (session.PendingExecutionPlan is not null &&
+            PlanningModePolicy.IsExecutionApproval(normalizedInput))
+        {
+            return await ExecuteApprovedPlanAsync(
+                normalizedInput,
+                session,
+                progressSink,
+                settings,
+                apiKey,
+                allToolDefinitions,
+                executionToolNames,
+                timeoutSource,
+                startedAt,
+                cancellationToken);
+        }
+
         List<ConversationRequestMessage> planningMessages =
         [
             .. session.GetConversationHistory(settings.MaxHistoryTurns),
@@ -118,6 +135,29 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 cancellationToken);
         }
 
+        if (PlanningModePolicy.ShouldStayInPlanningMode(normalizedInput))
+        {
+            session.SetPendingExecutionPlan(new PendingExecutionPlan(
+                normalizedInput,
+                planningResult.AssistantMessage,
+                PlanningModePolicy.ExtractPlanTasks(planningResult.AssistantMessage)));
+            session.AddConversationTurn(normalizedInput, planningResult.AssistantMessage);
+
+            string responseText = PlanningModePolicy.CreatePendingPlanResponse(planningResult.AssistantMessage);
+            ToolExecutionBatchResult? planningToolExecutionResult = CreateBatchResult(
+                planningResult.ExecutedToolResults);
+
+            return ConversationTurnResult.AssistantMessage(
+                responseText,
+                planningToolExecutionResult,
+                CreateMetrics(
+                    startedAt,
+                    responseText,
+                    planningResult.HasReportedCompletionTokens
+                        ? planningResult.TotalCompletionTokens
+                        : null));
+        }
+
         List<ConversationRequestMessage> executionMessages =
         [
             .. planningResult.Messages,
@@ -130,7 +170,8 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             executionMessages,
             PlanningModePolicy.CreateExecutionSystemPrompt(
                 settings.SystemPrompt,
-                planningResult.AssistantMessage),
+                planningResult.AssistantMessage,
+                isApprovedPlan: false),
             allToolDefinitions,
             executionToolNames,
             ConversationExecutionPhase.Execution,
@@ -140,7 +181,15 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             executionPlanTracker,
             cancellationToken);
 
+        if (executionPlanTracker is not null)
+        {
+            await progressSink.ReportExecutionPlanAsync(
+                executionPlanTracker.Complete(),
+                cancellationToken);
+        }
+
         ApplicationLogMessages.ConversationAssistantMessageReceived(_logger);
+        session.ClearPendingExecutionPlan();
         session.AddConversationTurn(normalizedInput, executionResult.AssistantMessage);
 
         int? completionTokens = null;
@@ -160,6 +209,75 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 startedAt,
                 executionResult.AssistantMessage,
                 completionTokens));
+    }
+
+    private async Task<ConversationTurnResult> ExecuteApprovedPlanAsync(
+        string normalizedInput,
+        ReplSessionContext session,
+        IConversationProgressSink progressSink,
+        ConversationSettings settings,
+        string apiKey,
+        IReadOnlyList<ToolDefinition> allToolDefinitions,
+        IReadOnlySet<string> executionToolNames,
+        CancellationTokenSource timeoutSource,
+        DateTimeOffset startedAt,
+        CancellationToken cancellationToken)
+    {
+        PendingExecutionPlan pendingPlan = session.PendingExecutionPlan
+            ?? throw new InvalidOperationException("A pending execution plan is required.");
+
+        ExecutionPlanTracker? executionPlanTracker = ExecutionPlanTracker.Create(
+            pendingPlan.Tasks);
+        if (executionPlanTracker is not null)
+        {
+            await progressSink.ReportExecutionPlanAsync(
+                executionPlanTracker.CreateSnapshot(),
+                cancellationToken);
+        }
+
+        List<ConversationRequestMessage> executionMessages =
+        [
+            .. session.GetConversationHistory(settings.MaxHistoryTurns),
+            ConversationRequestMessage.User(normalizedInput)
+        ];
+
+        PhaseExecutionResult executionResult = await RunPhaseAsync(
+            apiKey,
+            session,
+            executionMessages,
+            PlanningModePolicy.CreateExecutionSystemPrompt(
+                settings.SystemPrompt,
+                pendingPlan.PlanningSummary,
+                isApprovedPlan: true),
+            allToolDefinitions,
+            executionToolNames,
+            ConversationExecutionPhase.Execution,
+            progressSink,
+            settings,
+            timeoutSource,
+            executionPlanTracker,
+            cancellationToken);
+
+        if (executionPlanTracker is not null)
+        {
+            await progressSink.ReportExecutionPlanAsync(
+                executionPlanTracker.Complete(),
+                cancellationToken);
+        }
+
+        ApplicationLogMessages.ConversationAssistantMessageReceived(_logger);
+        session.ClearPendingExecutionPlan();
+        session.AddConversationTurn(normalizedInput, executionResult.AssistantMessage);
+
+        return ConversationTurnResult.AssistantMessage(
+            executionResult.AssistantMessage,
+            CreateBatchResult(executionResult.ExecutedToolResults),
+            CreateMetrics(
+                startedAt,
+                executionResult.AssistantMessage,
+                executionResult.HasReportedCompletionTokens
+                    ? executionResult.TotalCompletionTokens
+                    : null));
     }
 
     private ConversationTurnMetrics CreateMetrics(
@@ -362,6 +480,16 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
             : new ToolExecutionBatchResult(results);
     }
 
+    private static ToolExecutionBatchResult? CreateBatchResult(
+        IReadOnlyList<ToolInvocationResult> results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+
+        return results.Count == 0
+            ? null
+            : new ToolExecutionBatchResult(results.ToArray());
+    }
+
     private sealed class NoOpConversationProgressSink : IConversationProgressSink
     {
         public static NoOpConversationProgressSink Instance { get; } = new();
@@ -418,6 +546,12 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 _completedTaskCount++;
             }
 
+            return CreateSnapshot();
+        }
+
+        public ExecutionPlanProgress Complete()
+        {
+            _completedTaskCount = _tasks.Count;
             return CreateSnapshot();
         }
 
