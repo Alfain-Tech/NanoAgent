@@ -13,6 +13,7 @@ internal sealed class PlanningModeTool : ITool
         "Check installed build tools, compilers, SDKs, package managers, or runtimes with safe shell probes before choosing scaffold, build, or test commands.",
         "Use shell_command for toolchain work during execution when it materially advances the task: project scaffolding, dependency restore/install, code generation, build, test, lint, or format checks.",
         "Separate verified findings from assumptions or open questions.",
+        "Use update_plan for non-trivial execution work: publish concise steps, keep exactly one active in_progress step, and update statuses as work advances.",
         "Produce a high-quality ordered task list in Codex style that names likely files, commands, validation steps, and risks.",
         "Keep one active step at a time and revise the plan when new evidence changes the safest path; if the user asked only for a plan, stop after planning, otherwise continue execution when practical."
     ];
@@ -31,7 +32,7 @@ internal sealed class PlanningModeTool : ITool
     ];
 
     public string Description =>
-        "Switch into a Codex-style plan-first workflow for the current task. Use this when you want to inspect the repo, check the local toolchain when relevant, separate facts from assumptions, think through risks, and produce a high-quality task list before making changes. This tool does not modify files. After planning, continue execution in the same turn and work one step at a time unless the user asked only for a plan.";
+        "Switch into a Codex-style plan-first workflow for the current task. Use this when you want to inspect the repo, check the local toolchain when relevant, separate facts from assumptions, think through risks, and produce a high-quality task list before making changes. This tool does not modify files. After planning, call update_plan for meaningful multi-step execution, then continue in the same turn and work one step at a time unless the user asked only for a plan.";
 
     public string Name => AgentToolNames.PlanningMode;
 

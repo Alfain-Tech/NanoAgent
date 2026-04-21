@@ -597,6 +597,138 @@ public sealed class AgentConversationPipelineTests
     }
 
     [Fact]
+    public async Task ProcessAsync_Should_ReportLivePlanProgress_When_UpdatePlanToolRuns()
+    {
+        ReplSessionContext session = CreateSession();
+        Mock<IApiKeySecretStore> secretStore = new(MockBehavior.Strict);
+        secretStore
+            .Setup(store => store.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("test-key");
+
+        Mock<IConversationConfigurationAccessor> configurationAccessor = new(MockBehavior.Strict);
+        configurationAccessor
+            .Setup(accessor => accessor.GetSettings())
+            .Returns(CreateSettings("Base prompt"));
+
+        Mock<IToolRegistry> toolRegistry = new(MockBehavior.Strict);
+        toolRegistry
+            .Setup(registry => registry.GetToolDefinitions())
+            .Returns([
+                CreateToolDefinition(AgentToolNames.UpdatePlan),
+                CreateToolDefinition(AgentToolNames.FileRead)
+            ]);
+
+        List<ConversationProviderRequest> requests = [];
+        Mock<IConversationProviderClient> providerClient = new(MockBehavior.Strict);
+        providerClient
+            .Setup(client => client.SendAsync(
+                It.IsAny<ConversationProviderRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<ConversationProviderRequest, CancellationToken>((request, _) =>
+            {
+                requests.Add(request);
+                return Task.FromResult(new ConversationProviderPayload(
+                    ProviderKind.OpenAiCompatible,
+                    """{ "choices": [] }""",
+                    $"resp_{requests.Count}"));
+            });
+
+        Mock<IConversationResponseMapper> responseMapper = new(MockBehavior.Strict);
+        responseMapper
+            .SetupSequence(mapper => mapper.Map(It.IsAny<ConversationProviderPayload>()))
+            .Returns(new ConversationResponse(
+                null,
+                [
+                    new ConversationToolCall(
+                        "plan_call_1",
+                        AgentToolNames.UpdatePlan,
+                        """
+                        {
+                          "plan": [
+                            { "step": "Inspect planning flow", "status": "completed" },
+                            { "step": "Wire live plan progress", "status": "in_progress" },
+                            { "step": "Run validation", "status": "pending" }
+                          ]
+                        }
+                        """)
+                ],
+                "resp_1"))
+            .Returns(new ConversationResponse(
+                "Updated the planning system.",
+                [],
+                "resp_2"));
+
+        Mock<IToolExecutionPipeline> toolExecutionPipeline = new(MockBehavior.Strict);
+        toolExecutionPipeline
+            .Setup(pipeline => pipeline.ExecuteAsync(
+                It.Is<IReadOnlyList<ConversationToolCall>>(calls =>
+                    calls.Count == 1 &&
+                    calls[0].Name == AgentToolNames.UpdatePlan),
+                session,
+                ConversationExecutionPhase.Execution,
+                It.Is<IReadOnlySet<string>>(names =>
+                    names.Contains(AgentToolNames.UpdatePlan) &&
+                    names.Contains(AgentToolNames.FileRead)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ToolExecutionBatchResult([
+                new ToolInvocationResult(
+                    "plan_call_1",
+                    AgentToolNames.UpdatePlan,
+                    ToolResultFactory.Success(
+                        "Plan updated: 1 completed, 1 in progress, 1 pending.",
+                        new PlanUpdateResult(
+                            null,
+                            [
+                                new PlanUpdateItem("Inspect planning flow", "completed"),
+                                new PlanUpdateItem("Wire live plan progress", "in_progress"),
+                                new PlanUpdateItem("Run validation", "pending")
+                            ],
+                            1,
+                            1,
+                            1),
+                        ToolJsonContext.Default.PlanUpdateResult,
+                        new ToolRenderPayload("Plan updated", "plan")))
+            ]));
+
+        AgentConversationPipeline sut = CreateSut(
+            TimeProvider.System,
+            new HeuristicTokenEstimator(),
+            secretStore.Object,
+            providerClient.Object,
+            responseMapper.Object,
+            toolExecutionPipeline.Object,
+            toolRegistry.Object,
+            configurationAccessor.Object);
+
+        RecordingConversationProgressSink progressSink = new();
+
+        ConversationTurnResult result = await sut.ProcessAsync(
+            "Make planning more Codex-like.",
+            session,
+            progressSink,
+            CancellationToken.None);
+
+        result.ResponseText.Should().Be("Updated the planning system.");
+        result.ToolExecutionResult.Should().NotBeNull();
+        result.ToolExecutionResult!.Results.Should().ContainSingle();
+        result.ToolExecutionResult.Results[0].ToolName.Should().Be(AgentToolNames.UpdatePlan);
+        progressSink.PlanProgressUpdates.Should().ContainSingle();
+        progressSink.PlanProgressUpdates[0].Tasks.Should().Equal(
+            "Inspect planning flow",
+            "Wire live plan progress",
+            "Run validation");
+        progressSink.PlanProgressUpdates[0].CompletedTaskCount.Should().Be(1);
+        progressSink.PlanProgressUpdates[0].CurrentTaskIndex.Should().Be(1);
+        progressSink.CompletedToolBatches.Should().ContainSingle();
+        requests.Should().HaveCount(2);
+        requests[0].AvailableTools.Select(static tool => tool.Name)
+            .Should()
+            .Equal(AgentToolNames.UpdatePlan, AgentToolNames.FileRead);
+        requests[1].Messages.Should().HaveCount(3);
+        requests[1].Messages[2].Role.Should().Be("tool");
+    }
+
+    [Fact]
     public async Task ProcessAsync_Should_ThrowConversationPipelineException_When_ApiKeyIsMissing()
     {
         ReplSessionContext session = CreateSession();

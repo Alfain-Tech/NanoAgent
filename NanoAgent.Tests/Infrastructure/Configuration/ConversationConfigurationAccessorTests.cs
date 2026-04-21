@@ -43,6 +43,9 @@ public sealed class ConversationConfigurationAccessorTests
         result.SystemPrompt.Should().Contain("- planning_mode:");
         result.SystemPrompt.Should().Contain("Use planning_mode when the task is ambiguous");
         result.SystemPrompt.Should().Contain("- planning_mode");
+        result.SystemPrompt.Should().Contain("- update_plan");
+        result.SystemPrompt.Should().Contain("publish a live task list");
+        result.SystemPrompt.Should().Contain("pending`, `in_progress`, and `completed");
         result.SystemPrompt.Should().Contain("check installed build tools, compilers, SDKs, package managers, or runtimes");
         result.SystemPrompt.Should().Contain("dotnet --info");
         result.SystemPrompt.Should().Contain("project scaffolding, dependency restore/install");
@@ -53,12 +56,15 @@ public sealed class ConversationConfigurationAccessorTests
         result.SystemPrompt.Should().Contain("A Codex-style plan starts with evidence from the repo");
         result.SystemPrompt.Should().Contain("high-quality task list");
         result.SystemPrompt.Should().Contain("validation commands");
+        result.SystemPrompt.Should().Contain("visible plan synchronized");
+        result.SystemPrompt.Should().Contain("Keep exactly one meaningful task in_progress");
         result.SystemPrompt.Should().Contain("Distinguish verified facts from assumptions or open questions");
         result.SystemPrompt.Should().Contain("If status is InvalidArguments");
         result.SystemPrompt.Should().Contain("call the same tool again");
         result.SystemPrompt.Should().Contain("If apply_patch is rejected for malformed patch text");
         result.SystemPrompt.Should().Contain("final non-empty line is exactly `*** End Patch`");
         result.SystemPrompt.Should().Contain("If status is PermissionDenied");
+        result.SystemPrompt.Should().Contain("update_plan: {\"plan\"");
         result.SystemPrompt.Should().Contain("Execution discipline:");
         result.SystemPrompt.Should().Contain("work through it one task at a time");
         result.SystemPrompt.Should().Contain("High-quality plan example:");

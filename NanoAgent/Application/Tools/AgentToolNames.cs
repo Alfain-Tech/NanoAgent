@@ -10,5 +10,6 @@ internal static class AgentToolNames
     public const string FileWrite = "file_write";
     public const string ShellCommand = "shell_command";
     public const string TextSearch = "text_search";
+    public const string UpdatePlan = "update_plan";
     public const string WebSearch = "web_search";
 }

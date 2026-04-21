@@ -510,6 +510,11 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
 
             foreach (ToolInvocationResult invocationResult in toolExecutionResult.Results)
             {
+                if (IsSuccessfulPlanUpdate(invocationResult))
+                {
+                    continue;
+                }
+
                 if (CanGroupFileWrite(invocationResult))
                 {
                     fileWriteBatch.Add(invocationResult);
@@ -829,6 +834,12 @@ internal sealed class ConsoleReplOutputWriter : IReplOutputWriter
             return invocationResult.Result.IsSuccess &&
                    string.Equals(invocationResult.ToolName, AgentToolNames.FileWrite, StringComparison.Ordinal) &&
                    DeserializeWorkspaceFileWriteResult(invocationResult.Result.JsonResult) is not null;
+        }
+
+        private static bool IsSuccessfulPlanUpdate(ToolInvocationResult invocationResult)
+        {
+            return invocationResult.Result.IsSuccess &&
+                   string.Equals(invocationResult.ToolName, AgentToolNames.UpdatePlan, StringComparison.Ordinal);
         }
 
         private static string[] NormalizeLines(string text)

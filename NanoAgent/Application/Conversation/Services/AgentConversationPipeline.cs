@@ -4,6 +4,9 @@ using NanoAgent.Application.Exceptions;
 using NanoAgent.Application.Logging;
 using NanoAgent.Application.Models;
 using NanoAgent.Application.Planning;
+using NanoAgent.Application.Tools;
+using NanoAgent.Application.Tools.Models;
+using NanoAgent.Application.Tools.Serialization;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -357,12 +360,18 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
                 ApplicationLogMessages.ConversationToolHandoffCompleted(_logger);
                 executedToolResults.AddRange(toolExecutionResult.Results);
 
+                bool reportedPlanUpdate = await ReportPlanUpdatesAsync(
+                    toolExecutionResult,
+                    progressSink,
+                    cancellationToken);
+
                 await progressSink.ReportToolResultsAsync(
                     toolExecutionResult,
                     cancellationToken);
 
                 if (executionPhase == ConversationExecutionPhase.Execution &&
-                    executionPlanTracker is not null)
+                    executionPlanTracker is not null &&
+                    !reportedPlanUpdate)
                 {
                     await progressSink.ReportExecutionPlanAsync(
                         executionPlanTracker.Advance(),
@@ -399,6 +408,76 @@ internal sealed class AgentConversationPipeline : IConversationPipeline
         throw new ConversationResponseException(
             $"The provider requested too many sequential tool rounds without producing a final assistant message. " +
             $"Configured limit: {settings.MaxToolRoundsPerTurn} round(s).");
+    }
+
+    private static async Task<bool> ReportPlanUpdatesAsync(
+        ToolExecutionBatchResult toolExecutionResult,
+        IConversationProgressSink progressSink,
+        CancellationToken cancellationToken)
+    {
+        bool reportedPlanUpdate = false;
+
+        foreach (ToolInvocationResult invocationResult in toolExecutionResult.Results)
+        {
+            if (!TryCreatePlanProgress(invocationResult, out ExecutionPlanProgress? progress) ||
+                progress is null)
+            {
+                continue;
+            }
+
+            await progressSink.ReportExecutionPlanAsync(
+                progress,
+                cancellationToken);
+            reportedPlanUpdate = true;
+        }
+
+        return reportedPlanUpdate;
+    }
+
+    private static bool TryCreatePlanProgress(
+        ToolInvocationResult invocationResult,
+        out ExecutionPlanProgress? progress)
+    {
+        progress = null;
+
+        if (!invocationResult.Result.IsSuccess ||
+            !string.Equals(invocationResult.ToolName, AgentToolNames.UpdatePlan, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        PlanUpdateResult? result;
+        try
+        {
+            result = JsonSerializer.Deserialize(
+                invocationResult.Result.JsonResult,
+                ToolJsonContext.Default.PlanUpdateResult);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (result is null || result.Plan.Count == 0)
+        {
+            return false;
+        }
+
+        string[] tasks = result.Plan
+            .Select(static item => item.Step)
+            .Where(static step => !string.IsNullOrWhiteSpace(step))
+            .ToArray();
+
+        if (tasks.Length == 0)
+        {
+            return false;
+        }
+
+        int completedTaskCount = Math.Min(
+            result.CompletedTaskCount,
+            tasks.Length);
+        progress = new ExecutionPlanProgress(tasks, completedTaskCount);
+        return true;
     }
 
     private async Task<ConversationResponse?> SendAndMapResponseAsync(

@@ -153,7 +153,9 @@ internal static class PlanningModePolicy
         """
         Tool-driven planning:
         - `planning_mode` is available as an optional tool when you want to inspect and think first.
-        - Use it for ambiguous, risky, multi-step, or unfamiliar work when the right implementation path is not yet clear.
+        - Use planning_mode for ambiguous, risky, multi-step, or unfamiliar work when the right implementation path is not yet clear.
+        - `update_plan` is available for Codex-style live planning. Use it for meaningful multi-step work after you have enough evidence to define concrete steps.
+        - An update_plan call must contain a concise ordered task list. Use statuses `completed`, `in_progress`, and `pending`; keep at most one step `in_progress`; keep completed steps first, then the active step, then pending steps.
         - Before planning, gather repo evidence with read-only tools instead of guessing.
         - When relevant, use `shell_command` to inspect the environment and check installed build tools, SDKs, compilers, package managers, or runtimes with safe probe commands such as `dotnet --info`, `python --version`, `node --version`, `gcc --version`, `where.exe dotnet`, or `Get-Command cmake`.
         - During execution, use `shell_command` for real toolchain work when it materially advances the task: scaffold projects, restore or install dependencies, run code generation, build, test, lint, format, or inspect runtime behavior.
@@ -166,6 +168,7 @@ internal static class PlanningModePolicy
           - include concrete validation commands and key risks
           - recommend the best path when multiple approaches exist
         - After planning, execute the resulting task list one task at a time instead of jumping across unfinished work.
+        - Keep the live plan synchronized as work progresses: mark finished steps completed, keep the current step in_progress, and revise the list when evidence changes the safest path.
         - If the user asked only for a plan, respond with the plan and stop.
         - Otherwise, after planning, continue execution in the same turn when practical.
         - Do not wait for explicit plan approval unless the user asked you to stop after planning.

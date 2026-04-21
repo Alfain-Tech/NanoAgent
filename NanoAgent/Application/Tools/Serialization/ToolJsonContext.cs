@@ -4,6 +4,8 @@ using NanoAgent.Application.Tools.Models;
 namespace NanoAgent.Application.Tools.Serialization;
 
 [JsonSerializable(typeof(ToolErrorPayload))]
+[JsonSerializable(typeof(PlanUpdateItem))]
+[JsonSerializable(typeof(PlanUpdateResult))]
 [JsonSerializable(typeof(PlanningModeResult))]
 [JsonSerializable(typeof(WorkspaceApplyPatchFileResult))]
 [JsonSerializable(typeof(WorkspaceApplyPatchResult))]

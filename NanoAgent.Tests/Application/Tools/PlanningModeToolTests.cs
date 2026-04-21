@@ -42,6 +42,8 @@ public sealed class PlanningModeToolTests
         result.RenderPayload.Text.Should().Contain("Check installed build tools, compilers, SDKs");
         result.RenderPayload.Text.Should().Contain("scaffold, build, or test commands");
         result.RenderPayload.Text.Should().Contain("project scaffolding, dependency restore/install");
+        result.RenderPayload.Text.Should().Contain("Use update_plan");
+        result.RenderPayload.Text.Should().Contain("one active in_progress step");
         result.RenderPayload.Text.Should().Contain("Separate verified findings from assumptions");
         result.RenderPayload.Text.Should().Contain("high-quality ordered task list");
         result.RenderPayload.Text.Should().Contain("one active step at a time");
