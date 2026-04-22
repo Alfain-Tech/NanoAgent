@@ -99,6 +99,13 @@ internal sealed class ToolPermissionEvaluator : IPermissionEvaluator
             permissionPolicy,
             subjects);
 
+        if (permissionPolicy.BypassUserPermissionRules)
+        {
+            return PermissionEvaluationResult.Allowed(
+                PermissionMode.Allow,
+                request);
+        }
+
         PermissionMode effectiveMode = DetermineEffectiveMode(
             request,
             context.ToolExecutionContext.Session.PermissionOverrides,

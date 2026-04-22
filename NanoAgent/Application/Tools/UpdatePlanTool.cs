@@ -19,7 +19,8 @@ internal sealed class UpdatePlanTool : ITool
 
     public string PermissionRequirements => """
         {
-          "approvalMode": "Automatic"
+          "approvalMode": "Automatic",
+          "bypassUserPermissionRules": true
         }
         """;
 

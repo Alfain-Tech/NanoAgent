@@ -38,7 +38,8 @@ internal sealed class PlanningModeTool : ITool
 
     public string PermissionRequirements => """
         {
-          "approvalMode": "Automatic"
+          "approvalMode": "Automatic",
+          "bypassUserPermissionRules": true
         }
         """;
 

@@ -66,6 +66,24 @@ public sealed class ToolPermissionParserTests
         result.Patch.AllowedRoots.Should().Equal(".");
         result.WebRequest.Should().NotBeNull();
         result.WebRequest!.RequestArgumentName.Should().Be("query");
+        result.BypassUserPermissionRules.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Parse_Should_ReadBypassUserPermissionRules_When_Configured()
+    {
+        ToolPermissionParser sut = new();
+
+        ToolPermissionPolicy result = sut.Parse(
+            "planning_mode",
+            """
+            {
+              "approvalMode": "Automatic",
+              "bypassUserPermissionRules": true
+            }
+            """);
+
+        result.BypassUserPermissionRules.Should().BeTrue();
     }
 
     [Fact]

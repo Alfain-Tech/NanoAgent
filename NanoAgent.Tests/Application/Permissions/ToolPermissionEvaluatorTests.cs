@@ -384,6 +384,36 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
     }
 
     [Fact]
+    public void Evaluate_Should_BypassUserPermissionRules_When_PolicyRequestsIt()
+    {
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor(new PermissionSettings
+            {
+                DefaultMode = PermissionMode.Ask,
+                Rules =
+                [
+                    new PermissionRule
+                    {
+                        Tools = ["planning_mode"],
+                        Mode = PermissionMode.Deny
+                    }
+                ]
+            }));
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                ApprovalMode = ToolApprovalMode.RequireApproval,
+                BypassUserPermissionRules = true
+            },
+            new PermissionEvaluationContext(CreateContext("{}", toolName: "planning_mode")));
+
+        result.IsAllowed.Should().BeTrue();
+        result.EffectiveMode.Should().Be(PermissionMode.Allow);
+    }
+
+    [Fact]
     public void Evaluate_Should_DenyUnsafeShellCommands_When_PlanningModeIsActive()
     {
         ToolPermissionEvaluator sut = new(
@@ -464,13 +494,14 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
     private static ToolExecutionContext CreateContext(
         string argumentsJson,
         ReplSessionContext? session = null,
-        ConversationExecutionPhase executionPhase = ConversationExecutionPhase.Execution)
+        ConversationExecutionPhase executionPhase = ConversationExecutionPhase.Execution,
+        string toolName = "tool")
     {
         using JsonDocument document = JsonDocument.Parse(argumentsJson);
 
         return new ToolExecutionContext(
             "call_1",
-            "tool",
+            toolName,
             document.RootElement.Clone(),
             session ?? CreateSession(),
             executionPhase);

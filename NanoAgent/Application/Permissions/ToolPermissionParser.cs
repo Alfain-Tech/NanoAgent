@@ -71,6 +71,7 @@ internal sealed class ToolPermissionParser : IPermissionParser
         return new ToolPermissionPolicy
         {
             ApprovalMode = policy.ApprovalMode,
+            BypassUserPermissionRules = policy.BypassUserPermissionRules,
             FilePaths = filePathRules,
             Patch = patchPolicy,
             Shell = shellPolicy,

@@ -4,6 +4,8 @@ public sealed class ToolPermissionPolicy
 {
     public ToolApprovalMode ApprovalMode { get; set; } = ToolApprovalMode.Automatic;
 
+    public bool BypassUserPermissionRules { get; set; }
+
     public FilePathPermissionRule[] FilePaths { get; set; } = [];
 
     public PatchPermissionPolicy? Patch { get; set; }
