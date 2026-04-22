@@ -14,7 +14,7 @@ internal sealed class ShellCommandTool : ITool
         _shellCommandService = shellCommandService;
     }
 
-    public string Description => "Run an OS-native shell command in the current workspace to inspect files, probe toolchains, scaffold projects, install or restore dependencies, build, test, lint, and capture stdout, stderr, and exit code.";
+    public string Description => "Run an OS-native shell command in the current workspace to inspect files, probe toolchains, scaffold projects, install or restore dependencies, build, test, lint, or execute short multi-command chains, and capture stdout, stderr, and exit code.";
 
     public string Name => AgentToolNames.ShellCommand;
 
@@ -35,6 +35,7 @@ internal sealed class ShellCommandTool : ITool
               "bun",
               "cargo",
               "cat",
+              "cd",
               "clang",
               "clang++",
               "cmake",
@@ -62,6 +63,7 @@ internal sealed class ShellCommandTool : ITool
               "kotlinc",
               "ls",
               "make",
+              "mkdir",
               "msbuild",
               "mvn",
               "node",

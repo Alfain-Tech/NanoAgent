@@ -69,7 +69,9 @@ public sealed class ShellCommandToolTests
         registration!.PermissionPolicy.Shell.Should().NotBeNull();
         registration.PermissionPolicy.Shell!.AllowedCommands.Should().Contain(
         [
+            "cd",
             "dotnet",
+            "mkdir",
             "npm",
             "npx",
             "node",

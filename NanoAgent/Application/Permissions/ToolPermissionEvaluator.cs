@@ -429,13 +429,6 @@ internal sealed class ToolPermissionEvaluator : IPermissionEvaluator
             return PermissionEvaluationResult.Allowed();
         }
 
-        if (!ShellCommandText.TryGetCommandName(commandText!, out string commandName))
-        {
-            return PermissionEvaluationResult.Denied(
-                "invalid_shell_command",
-                $"Tool '{context.ToolName}' did not receive a valid shell command.");
-        }
-
         if (context.ExecutionPhase == ConversationExecutionPhase.Planning &&
             PlanningModePolicy.ShouldBypassShellAllowlistForPlanning(commandText!))
         {
@@ -443,20 +436,57 @@ internal sealed class ToolPermissionEvaluator : IPermissionEvaluator
             return PermissionEvaluationResult.Allowed();
         }
 
-        bool isAllowed = shellPolicy.AllowedCommands.Contains(
-            commandName,
-            StringComparer.OrdinalIgnoreCase);
-
-        if (!isAllowed)
+        IReadOnlyList<ShellCommandSegment> segments = ShellCommandText.ParseSegments(commandText!);
+        if (segments.Count == 0)
         {
-            string allowedCommands = string.Join(", ", shellPolicy.AllowedCommands);
             return PermissionEvaluationResult.Denied(
-                "shell_command_not_allowed",
-                $"Tool '{context.ToolName}' cannot execute shell command '{commandName}'. Allowed commands: {allowedCommands}.");
+                "invalid_shell_command",
+                $"Tool '{context.ToolName}' did not receive a valid shell command.");
         }
 
-        subjects.Add(commandText!.Trim());
+        AddSubject(subjects, commandText!.Trim());
+
+        foreach (ShellCommandSegment segment in segments)
+        {
+            if (!ShellCommandText.TryGetCommandName(segment.CommandText, out string commandName))
+            {
+                return PermissionEvaluationResult.Denied(
+                    "invalid_shell_command",
+                    $"Tool '{context.ToolName}' did not receive a valid shell command.");
+            }
+
+            bool isAllowed = shellPolicy.AllowedCommands.Contains(
+                commandName,
+                StringComparer.OrdinalIgnoreCase);
+
+            if (!isAllowed)
+            {
+                string allowedCommands = string.Join(", ", shellPolicy.AllowedCommands);
+                return PermissionEvaluationResult.Denied(
+                    "shell_command_not_allowed",
+                    $"Tool '{context.ToolName}' cannot execute shell command '{commandName}'. Allowed commands: {allowedCommands}.");
+            }
+
+            AddSubject(subjects, segment.CommandText);
+        }
+
         return PermissionEvaluationResult.Allowed();
+    }
+
+    private static void AddSubject(
+        List<string> subjects,
+        string subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return;
+        }
+
+        string normalizedSubject = subject.Trim();
+        if (!subjects.Contains(normalizedSubject, StringComparer.OrdinalIgnoreCase))
+        {
+            subjects.Add(normalizedSubject);
+        }
     }
 
     private static void AddWebRequestSubject(

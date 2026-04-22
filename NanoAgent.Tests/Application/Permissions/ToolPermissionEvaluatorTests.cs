@@ -136,6 +136,49 @@ public sealed class ToolPermissionEvaluatorTests : IDisposable
     }
 
     [Fact]
+    public void Evaluate_Should_AllowChainedCommands_When_AllSegmentsAreAllowlisted()
+    {
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                Shell = new ShellCommandPermissionPolicy
+                {
+                    CommandArgumentName = "command",
+                    AllowedCommands = ["node", "npm"]
+                }
+            },
+            new PermissionEvaluationContext(CreateContext("""{ "command": "node -v && npm -v" }""")));
+
+        result.IsAllowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Evaluate_Should_DenyChainedCommands_When_AnySegmentIsNotAllowlisted()
+    {
+        ToolPermissionEvaluator sut = new(
+            new StubWorkspaceRootProvider(_workspaceRoot),
+            new StubPermissionConfigurationAccessor());
+
+        PermissionEvaluationResult result = sut.Evaluate(
+            new ToolPermissionPolicy
+            {
+                Shell = new ShellCommandPermissionPolicy
+                {
+                    CommandArgumentName = "command",
+                    AllowedCommands = ["node", "npm"]
+                }
+            },
+            new PermissionEvaluationContext(CreateContext("""{ "command": "node -v && rm -rf ." }""")));
+
+        result.Decision.Should().Be(PermissionEvaluationDecision.Denied);
+        result.ReasonCode.Should().Be("shell_command_not_allowed");
+    }
+
+    [Fact]
     public void Evaluate_Should_DenyWriteTools_When_ProfileIsReadOnly()
     {
         ToolPermissionEvaluator sut = new(

@@ -1,6 +1,8 @@
 using NanoAgent.Application.Abstractions;
+using NanoAgent.Application.Tools;
 using NanoAgent.Application.Tools.Models;
 using NanoAgent.Infrastructure.Secrets;
+using System.Text;
 
 namespace NanoAgent.Infrastructure.Tools;
 
@@ -34,10 +36,13 @@ internal sealed class ShellCommandService : IShellCommandService
         }
 
         string workingDirectory = ResolveWorkspacePath(request.WorkingDirectory, directoryRequired: true);
+        string commandText = OperatingSystem.IsWindows()
+            ? BuildWindowsCommandText(request.Command)
+            : request.Command;
         ProcessExecutionRequest processRequest = OperatingSystem.IsWindows()
             ? new ProcessExecutionRequest(
                 "powershell",
-                ["-NoProfile", "-NonInteractive", "-Command", request.Command],
+                ["-NoProfile", "-NonInteractive", "-Command", commandText],
                 WorkingDirectory: workingDirectory)
             : new ProcessExecutionRequest(
                 "/bin/bash",
@@ -54,6 +59,56 @@ internal sealed class ShellCommandService : IShellCommandService
             result.ExitCode,
             TrimOutput(result.StandardOutput),
             TrimOutput(result.StandardError));
+    }
+
+    private static string BuildWindowsCommandText(string commandText)
+    {
+        IReadOnlyList<ShellCommandSegment> segments = ShellCommandText.ParseSegments(commandText);
+        if (segments.Count <= 1)
+        {
+            return commandText;
+        }
+
+        StringBuilder scriptBuilder = new();
+        scriptBuilder.AppendLine("$ErrorActionPreference = 'Continue'");
+        scriptBuilder.AppendLine("function Invoke-NanoSegment([string]$encoded) {");
+        scriptBuilder.AppendLine("  Set-Variable -Name LASTEXITCODE -Scope Global -Value 0 -Force");
+        scriptBuilder.AppendLine("  $scriptText = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encoded))");
+        scriptBuilder.AppendLine("  try {");
+        scriptBuilder.AppendLine("    & ([ScriptBlock]::Create($scriptText))");
+        scriptBuilder.AppendLine("    if (-not $?) { return 1 }");
+        scriptBuilder.AppendLine("    return [int]$global:LASTEXITCODE");
+        scriptBuilder.AppendLine("  }");
+        scriptBuilder.AppendLine("  catch {");
+        scriptBuilder.AppendLine("    Write-Error $_");
+        scriptBuilder.AppendLine("    return 1");
+        scriptBuilder.AppendLine("  }");
+        scriptBuilder.AppendLine("}");
+
+        for (int index = 0; index < segments.Count; index++)
+        {
+            ShellCommandSegment segment = segments[index];
+            string encodedSegment = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes(segment.CommandText));
+            string invocation = $"$__nano_exit = Invoke-NanoSegment('{encodedSegment}')";
+
+            if (index == 0 || segment.Condition == ShellCommandSegmentCondition.Always)
+            {
+                scriptBuilder.AppendLine(invocation);
+                continue;
+            }
+
+            if (segment.Condition == ShellCommandSegmentCondition.OnSuccess)
+            {
+                scriptBuilder.AppendLine($"if ($__nano_exit -eq 0) {{ {invocation} }}");
+                continue;
+            }
+
+            scriptBuilder.AppendLine($"if ($__nano_exit -ne 0) {{ {invocation} }}");
+        }
+
+        scriptBuilder.AppendLine("exit $__nano_exit");
+        return scriptBuilder.ToString();
     }
 
     private string ResolveWorkspacePath(
