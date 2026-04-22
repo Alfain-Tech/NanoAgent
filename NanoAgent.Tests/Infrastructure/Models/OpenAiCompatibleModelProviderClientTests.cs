@@ -54,6 +54,28 @@ public sealed class OpenAiCompatibleModelProviderClientTests
         models.Select(model => model.Id).Should().Equal("gpt-5-mini");
     }
 
+    [Fact]
+    public async Task GetAvailableModelsAsync_Should_RequestGoogleAiStudioModelsEndpoint_When_GoogleAiStudioProviderIsConfigured()
+    {
+        RecordingHandler handler = new("""
+            {
+              "data": [
+                { "id": "gemini-2.5-flash" }
+              ]
+            }
+            """);
+        HttpClient httpClient = new(handler);
+        OpenAiCompatibleModelProviderClient sut = CreateSut(httpClient);
+
+        IReadOnlyList<AvailableModel> models = await sut.GetAvailableModelsAsync(
+            new AgentProviderProfile(ProviderKind.GoogleAiStudio, null),
+            "test-key",
+            CancellationToken.None);
+
+        handler.RequestUri.Should().Be(new Uri("https://generativelanguage.googleapis.com/v1beta/openai/models"));
+        models.Select(model => model.Id).Should().Equal("gemini-2.5-flash");
+    }
+
     private static OpenAiCompatibleModelProviderClient CreateSut(HttpClient httpClient)
     {
         return new OpenAiCompatibleModelProviderClient(

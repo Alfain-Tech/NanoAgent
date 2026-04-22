@@ -144,7 +144,7 @@ internal sealed class ModelDiscoveryService : IModelDiscoveryService
 
     private static string BuildCacheKey(AgentProviderProfile providerProfile, string apiKey)
     {
-        string rawKey = $"{providerProfile.ProviderKind}|{providerProfile.BaseUrl ?? "https://api.openai.com/v1"}|{apiKey}";
+        string rawKey = $"{providerProfile.ProviderKind}|{providerProfile.ResolveBaseUrl()}|{apiKey}";
         byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawKey));
         return Convert.ToHexString(hashBytes);
     }

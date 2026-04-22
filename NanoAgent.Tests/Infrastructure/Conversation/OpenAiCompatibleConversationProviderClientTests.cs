@@ -99,6 +99,42 @@ public sealed class OpenAiCompatibleConversationProviderClientTests
     }
 
     [Fact]
+    public async Task SendAsync_Should_PostChatCompletionsToGoogleAiStudioEndpoint_When_GoogleAiStudioProviderIsSelected()
+    {
+        RecordingHandler handler = new("""
+            {
+              "id": "resp_4",
+              "choices": [
+                {
+                  "message": {
+                    "content": "Hello from Gemini."
+                  }
+                }
+              ]
+            }
+            """);
+        HttpClient httpClient = new(handler);
+        OpenAiCompatibleConversationProviderClient sut = CreateSut(httpClient);
+
+        ConversationProviderPayload payload = await sut.SendAsync(
+            new ConversationProviderRequest(
+                new AgentProviderProfile(ProviderKind.GoogleAiStudio, null),
+                "test-key",
+                "gemini-2.5-flash",
+                [
+                    ConversationRequestMessage.User("Say hello.")
+                ],
+                "You are helpful.",
+                []),
+            CancellationToken.None);
+
+        handler.RequestUri.Should().Be(new Uri("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"));
+        handler.AuthorizationHeader.Should().Be("Bearer test-key");
+        handler.RequestBody.Should().Contain("\"model\":\"gemini-2.5-flash\"");
+        payload.ResponseId.Should().Be("req_789");
+    }
+
+    [Fact]
     public async Task SendAsync_Should_PreserveStructuredToolFeedbackJson_When_ToolMessagesContainStatusMetadata()
     {
         RecordingHandler handler = new("""

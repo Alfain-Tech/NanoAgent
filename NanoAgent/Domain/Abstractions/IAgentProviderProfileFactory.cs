@@ -7,4 +7,6 @@ public interface IAgentProviderProfileFactory
     AgentProviderProfile CreateOpenAi();
 
     AgentProviderProfile CreateCompatible(string baseUrl);
+
+    AgentProviderProfile CreateGoogleAiStudio();
 }

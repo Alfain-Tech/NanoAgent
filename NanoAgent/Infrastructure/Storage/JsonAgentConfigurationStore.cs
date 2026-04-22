@@ -119,6 +119,7 @@ internal sealed class JsonAgentConfigurationStore : IAgentConfigurationStore
         return profile.ProviderKind switch
         {
             ProviderKind.OpenAi => new AgentProviderProfile(ProviderKind.OpenAi, BaseUrl: null),
+            ProviderKind.GoogleAiStudio => new AgentProviderProfile(ProviderKind.GoogleAiStudio, BaseUrl: null),
             ProviderKind.OpenAiCompatible when !string.IsNullOrWhiteSpace(profile.BaseUrl)
                 => new AgentProviderProfile(
                     ProviderKind.OpenAiCompatible,

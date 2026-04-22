@@ -17,6 +17,14 @@ public sealed class AgentProviderProfileFactoryTests
     }
 
     [Fact]
+    public void CreateGoogleAiStudio_Should_ReturnGoogleAiStudioProfile_When_Called()
+    {
+        AgentProviderProfile profile = _sut.CreateGoogleAiStudio();
+
+        profile.Should().Be(new AgentProviderProfile(ProviderKind.GoogleAiStudio, null));
+    }
+
+    [Fact]
     public void CreateCompatible_Should_NormalizeTrailingSlash_When_BaseUrlIsProvided()
     {
         AgentProviderProfile profile = _sut.CreateCompatible(" https://provider.example.com/v1/ ");

@@ -1,12 +1,11 @@
 using NanoAgent.Application.Abstractions;
 using NanoAgent.Application.Models;
+using NanoAgent.Domain.Models;
 
 namespace NanoAgent.Application.Repl.Commands;
 
 internal sealed class ConfigCommandHandler : IReplCommandHandler
 {
-    private const string OpenAiBaseUrl = "https://api.openai.com/v1/";
-
     private readonly IUserDataPathProvider _userDataPathProvider;
 
     public ConfigCommandHandler(IUserDataPathProvider userDataPathProvider)
@@ -27,9 +26,9 @@ internal sealed class ConfigCommandHandler : IReplCommandHandler
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string baseUrl = context.Session.ProviderProfile.ProviderKind == Domain.Models.ProviderKind.OpenAi
-            ? OpenAiBaseUrl
-            : context.Session.ProviderProfile.BaseUrl ?? "(not configured)";
+        string baseUrl = context.Session.ProviderProfile.ProviderKind.GetManagedBaseUrl()
+            ?? context.Session.ProviderProfile.BaseUrl
+            ?? "(not configured)";
 
         string message =
             "Current configuration:\n" +

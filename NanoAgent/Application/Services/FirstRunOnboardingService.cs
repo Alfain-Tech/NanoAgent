@@ -17,6 +17,10 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
             OnboardingProviderChoice.OpenAi,
             "Use the official OpenAI API with only an API key."),
         new(
+            "Google AI Studio",
+            OnboardingProviderChoice.GoogleAiStudio,
+            "Use Gemini through Google AI Studio with only a Gemini API key."),
+        new(
             "OpenAI-compatible provider",
             OnboardingProviderChoice.OpenAiCompatible,
             "Use a custom base URL and API key.")
@@ -107,17 +111,21 @@ internal sealed class FirstRunOnboardingService : IFirstRunOnboardingService
                 "Pick how NanoAgent should connect to your model provider on this machine."),
             cancellationToken);
 
-        AgentProviderProfile profile = providerChoice == OnboardingProviderChoice.OpenAi
-            ? _profileFactory.CreateOpenAi()
-            : _profileFactory.CreateCompatible(
+        AgentProviderProfile profile = providerChoice switch
+        {
+            OnboardingProviderChoice.OpenAi => _profileFactory.CreateOpenAi(),
+            OnboardingProviderChoice.GoogleAiStudio => _profileFactory.CreateGoogleAiStudio(),
+            OnboardingProviderChoice.OpenAiCompatible => _profileFactory.CreateCompatible(
                 await PromptUntilValidAsync(
-                    cancellationToken => _textPrompt.PromptAsync(
+                    promptCancellationToken => _textPrompt.PromptAsync(
                         new TextPromptRequest(
                             "Base URL",
                             "Enter the OpenAI-compatible base URL, for example https://api.example.com/v1."),
-                        cancellationToken),
+                        promptCancellationToken),
                     _inputValidator.ValidateBaseUrl,
-                    cancellationToken));
+                    cancellationToken)),
+            _ => throw new InvalidOperationException($"Unsupported provider choice '{providerChoice}'.")
+        };
 
         string apiKey = await PromptUntilValidAsync(
             cancellationToken => _secretPrompt.PromptAsync(

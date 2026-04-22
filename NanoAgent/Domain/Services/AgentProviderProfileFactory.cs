@@ -10,6 +10,11 @@ internal sealed class AgentProviderProfileFactory : IAgentProviderProfileFactory
         return new AgentProviderProfile(ProviderKind.OpenAi, BaseUrl: null);
     }
 
+    public AgentProviderProfile CreateGoogleAiStudio()
+    {
+        return new AgentProviderProfile(ProviderKind.GoogleAiStudio, BaseUrl: null);
+    }
+
     public AgentProviderProfile CreateCompatible(string baseUrl)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
