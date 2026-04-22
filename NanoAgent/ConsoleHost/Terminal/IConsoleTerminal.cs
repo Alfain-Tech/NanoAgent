@@ -2,13 +2,9 @@ namespace NanoAgent.ConsoleHost.Terminal;
 
 internal interface IConsoleTerminal
 {
-    ConsoleColor BackgroundColor { get; set; }
-
     int CursorLeft { get; }
 
     int CursorTop { get; }
-
-    ConsoleColor ForegroundColor { get; set; }
 
     bool IsInputRedirected { get; }
 
@@ -23,8 +19,6 @@ internal interface IConsoleTerminal
     ConsoleKeyInfo ReadKey(bool intercept);
 
     string? ReadLine();
-
-    void ResetColor();
 
     void SetCursorPosition(int left, int top);
 

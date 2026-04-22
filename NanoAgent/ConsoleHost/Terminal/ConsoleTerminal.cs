@@ -2,12 +2,6 @@ namespace NanoAgent.ConsoleHost.Terminal;
 
 internal sealed class ConsoleTerminal : IConsoleTerminal
 {
-    public ConsoleColor BackgroundColor
-    {
-        get => Console.BackgroundColor;
-        set => Console.BackgroundColor = value;
-    }
-
     public int CursorLeft
     {
         get
@@ -24,12 +18,6 @@ internal sealed class ConsoleTerminal : IConsoleTerminal
     }
 
     public int CursorTop => Console.CursorTop;
-
-    public ConsoleColor ForegroundColor
-    {
-        get => Console.ForegroundColor;
-        set => Console.ForegroundColor = value;
-    }
 
     public bool IsInputRedirected => Console.IsInputRedirected;
 
@@ -92,11 +80,6 @@ internal sealed class ConsoleTerminal : IConsoleTerminal
     public string? ReadLine()
     {
         return Console.ReadLine();
-    }
-
-    public void ResetColor()
-    {
-        Console.ResetColor();
     }
 
     public void SetCursorPosition(int left, int top)

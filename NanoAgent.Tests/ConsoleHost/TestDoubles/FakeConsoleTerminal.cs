@@ -10,13 +10,9 @@ internal sealed class FakeConsoleTerminal : IConsoleTerminal
     private readonly List<ConsoleLine> _lines = [new ConsoleLine()];
     private int _cursorLeft;
 
-    public ConsoleColor BackgroundColor { get; set; } = ConsoleColor.Black;
-
     public int CursorLeft => _cursorLeft;
 
     public int CursorTop { get; private set; }
-
-    public ConsoleColor ForegroundColor { get; set; } = ConsoleColor.Gray;
 
     public bool IsInputRedirected { get; set; }
 
@@ -58,10 +54,6 @@ internal sealed class FakeConsoleTerminal : IConsoleTerminal
         }
 
         return _lineQueue.Dequeue();
-    }
-
-    public void ResetColor()
-    {
     }
 
     public void SetCursorPosition(int left, int top)

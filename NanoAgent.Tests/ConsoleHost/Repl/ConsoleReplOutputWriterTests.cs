@@ -440,13 +440,9 @@ public sealed class ConsoleReplOutputWriterTests
             _maxCursorTop = maxCursorTop;
         }
 
-        public ConsoleColor BackgroundColor { get; set; } = ConsoleColor.Black;
-
         public int CursorLeft => _cursorLeft;
 
         public int CursorTop { get; private set; }
-
-        public ConsoleColor ForegroundColor { get; set; } = ConsoleColor.Gray;
 
         public bool IsInputRedirected => false;
 
@@ -468,10 +464,6 @@ public sealed class ConsoleReplOutputWriterTests
         public string? ReadLine()
         {
             throw new NotSupportedException();
-        }
-
-        public void ResetColor()
-        {
         }
 
         public void SetCursorPosition(int left, int top)
@@ -652,13 +644,9 @@ public sealed class ConsoleReplOutputWriterTests
         private readonly StringBuilder _rawOutput = new();
         private int _cursorLeft;
 
-        public ConsoleColor BackgroundColor { get; set; } = ConsoleColor.Black;
-
         public int CursorLeft => _cursorLeft;
 
         public int CursorTop { get; private set; }
-
-        public ConsoleColor ForegroundColor { get; set; } = ConsoleColor.Gray;
 
         public bool IsInputRedirected => false;
 
@@ -680,10 +668,6 @@ public sealed class ConsoleReplOutputWriterTests
         public string? ReadLine()
         {
             throw new NotSupportedException();
-        }
-
-        public void ResetColor()
-        {
         }
 
         public void SetCursorPosition(int left, int top)

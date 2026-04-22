@@ -1,10 +1,19 @@
 using NanoAgent.Application.Models;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace NanoAgent.ConsoleHost.Terminal;
 
 internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
 {
+    private static readonly Style TitleStyle = new(Color.Aqua, decoration: Decoration.Bold);
+    private static readonly Style DescriptionStyle = new(Color.Grey);
+    private static readonly Style InstructionStyle = new(Color.Grey);
+    private static readonly Style OptionStyle = new(Color.White);
+    private static readonly Style SelectedOptionStyle = new(Color.Black, Color.Aqua, Decoration.Bold);
+    private static readonly Style PromptStyle = new(Color.Aqua, decoration: Decoration.Bold);
+    private static readonly Style DefaultStyle = new(Color.Yellow);
+
     private readonly IConsoleTerminal _terminal;
     private readonly IAnsiConsole _console;
 
@@ -18,9 +27,11 @@ internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
 
     public InteractiveSelectionPromptLayout WriteInteractiveSelectionPrompt<T>(SelectionPromptRequest<T> request, int selectedIndex)
     {
+        string instructions = BuildInteractiveInstructions(request.AllowCancellation);
+
         EnsurePromptStartsOnNewLine();
         WriteHeading(request.Title, request.Description);
-        _terminal.WriteLine(BuildInteractiveInstructions(request.AllowCancellation));
+        WriteStyledLine(instructions, InstructionStyle);
         _terminal.WriteLine();
 
         WriteSelectionOptions(request.Options, selectedIndex);
@@ -28,7 +39,7 @@ internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
         int totalLineCount =
             CountLogicalLines(request.Title) +
             CountLogicalLines(request.Description) +
-            CountLogicalLines(BuildInteractiveInstructions(request.AllowCancellation)) +
+            CountLogicalLines(instructions) +
             1 +
             request.Options.Count;
         int promptBottom = _terminal.CursorTop;
@@ -71,31 +82,17 @@ internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
                 break;
             }
 
-            _console.Write(new string(' ', width));
+            _console.Write(new Text(new string(' ', width)));
         }
 
         TrySetCursorPosition(0, layout.PromptTop);
-    }
-
-    public void WriteFallbackSelectionPrompt<T>(SelectionPromptRequest<T> request)
-    {
-        EnsurePromptStartsOnNewLine();
-        WriteHeading(request.Title, request.Description);
-
-        for (int index = 0; index < request.Options.Count; index++)
-        {
-            SelectionPromptOption<T> option = request.Options[index];
-            _terminal.WriteLine($"{index + 1}. {BuildOptionLabel(option)}");
-        }
-
-        _terminal.WriteLine();
     }
 
     public void WriteSecretPrompt(SecretPromptRequest request)
     {
         EnsurePromptStartsOnNewLine();
         WriteHeading(request.Label, request.Description);
-        _terminal.Write("> ");
+        WriteStyledInline("> ", PromptStyle);
     }
 
     public void WriteStatus(StatusMessageKind kind, string message)
@@ -108,12 +105,6 @@ internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
             StatusMessageKind.Success => "[ok]",
             _ => "[info]"
         };
-
-        if (_terminal.IsOutputRedirected)
-        {
-            _console.WriteLine($"{prefix} {message}");
-            return;
-        }
 
         Style style = kind switch
         {
@@ -131,27 +122,28 @@ internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
         WriteHeading(request.Label, request.Description);
         if (!string.IsNullOrWhiteSpace(request.DefaultValue))
         {
-            _terminal.WriteLine($"Default: {request.DefaultValue}");
+            WriteStyledInline("Default: ", InstructionStyle);
+            WriteStyledLine(request.DefaultValue, DefaultStyle);
         }
 
-        _terminal.Write("> ");
+        WriteStyledInline("> ", PromptStyle);
     }
 
-    private string BuildOptionLabel<T>(SelectionPromptOption<T> option)
+    private static string BuildOptionLabel<T>(SelectionPromptOption<T> option)
     {
         return string.IsNullOrWhiteSpace(option.Description)
             ? option.Label
             : $"{option.Label} - {option.Description}";
     }
 
-    private string BuildInteractiveInstructions(bool allowCancellation)
+    private static string BuildInteractiveInstructions(bool allowCancellation)
     {
         return allowCancellation
             ? "Use Up/Down to move, Enter to confirm, Esc to cancel."
             : "Use Up/Down to move and Enter to confirm.";
     }
 
-    private string FormatInteractiveOption<T>(SelectionPromptOption<T> option, bool isSelected)
+    private static string FormatInteractiveOption<T>(SelectionPromptOption<T> option, bool isSelected)
     {
         string prefix = isSelected ? "> " : "  ";
         return prefix + BuildOptionLabel(option);
@@ -187,19 +179,15 @@ internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
             return 0;
         }
 
-        return value
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n', StringSplitOptions.None)
-            .Length;
+        return SplitLogicalLines(value).Length;
     }
 
     private void WriteHeading(string title, string? description)
     {
-        _terminal.WriteLine(title);
+        WriteStyledLogicalLines(title, TitleStyle);
         if (!string.IsNullOrWhiteSpace(description))
         {
-            _terminal.WriteLine(description);
+            WriteStyledLogicalLines(description, DescriptionStyle);
         }
     }
 
@@ -214,36 +202,40 @@ internal sealed class ConsolePromptRenderer : IConsolePromptRenderer
 
             if (isSelected)
             {
-                WriteHighlightedInteractiveLine(line);
+                WriteStyledLine(line, SelectedOptionStyle);
             }
             else
             {
-                _terminal.WriteLine(line);
+                WriteStyledLine(line, OptionStyle);
             }
         }
     }
 
     private void WriteStyledLine(string text, Style style)
     {
-        _console.WriteLine(text, style);
+        _console.Write(new Text(text, style));
+        _console.WriteLine();
     }
 
-    private void WriteHighlightedInteractiveLine(string text)
+    private void WriteStyledInline(string text, Style style)
     {
-        ConsoleColor previousForeground = _terminal.ForegroundColor;
-        ConsoleColor previousBackground = _terminal.BackgroundColor;
+        _console.Write(new Text(text, style));
+    }
 
-        try
+    private void WriteStyledLogicalLines(string text, Style style)
+    {
+        foreach (string line in SplitLogicalLines(text))
         {
-            _terminal.ForegroundColor = ConsoleColor.Black;
-            _terminal.BackgroundColor = ConsoleColor.Gray;
-            _terminal.WriteLine(text);
+            WriteStyledLine(line, style);
         }
-        finally
-        {
-            _terminal.ForegroundColor = previousForeground;
-            _terminal.BackgroundColor = previousBackground;
-        }
+    }
+
+    private static string[] SplitLogicalLines(string value)
+    {
+        return value
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n', StringSplitOptions.None);
     }
 
     private bool TrySetCursorPosition(int left, int top)

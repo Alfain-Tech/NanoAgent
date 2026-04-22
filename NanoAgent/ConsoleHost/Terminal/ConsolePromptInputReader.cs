@@ -1,15 +1,24 @@
 using System.Text;
 using NanoAgent.Application.Exceptions;
+using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace NanoAgent.ConsoleHost.Terminal;
 
 internal sealed class ConsolePromptInputReader : IConsolePromptInputReader
 {
-    private readonly IConsoleTerminal _terminal;
+    private static readonly Style PlainTextEchoStyle = new(Color.White);
+    private static readonly Style SecretMaskEchoStyle = new(Color.Yellow);
 
-    public ConsolePromptInputReader(IConsoleTerminal terminal)
+    private readonly IConsoleTerminal _terminal;
+    private readonly IAnsiConsole _console;
+
+    public ConsolePromptInputReader(
+        IConsoleTerminal terminal,
+        IAnsiConsole console)
     {
         _terminal = terminal;
+        _console = console;
     }
 
     public Task<string> ReadLineAsync(
@@ -53,13 +62,22 @@ internal sealed class ConsolePromptInputReader : IConsolePromptInputReader
                     if (!char.IsControl(keyInfo.KeyChar))
                     {
                         builder.Append(keyInfo.KeyChar);
-                        _terminal.Write(echoMode == ConsoleInputEchoMode.SecretMask
-                            ? "*"
-                            : keyInfo.KeyChar.ToString());
+                        WriteEcho(keyInfo.KeyChar, echoMode);
                     }
 
                     break;
             }
         }
+    }
+
+    private void WriteEcho(char character, ConsoleInputEchoMode echoMode)
+    {
+        if (echoMode == ConsoleInputEchoMode.SecretMask)
+        {
+            _console.Write(new Text("*", SecretMaskEchoStyle));
+            return;
+        }
+
+        _console.Write(new Text(character.ToString(), PlainTextEchoStyle));
     }
 }

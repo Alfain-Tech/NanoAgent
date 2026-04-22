@@ -10,21 +10,18 @@ internal sealed class ConsoleSelectionPrompt : ISelectionPrompt
     private readonly IConsoleInteractionGate _interactionGate;
     private readonly IConsoleTerminal _terminal;
     private readonly IConsolePromptRenderer _renderer;
-    private readonly IStatusMessageWriter _statusMessageWriter;
 
     public ConsoleSelectionPrompt(
         IConsoleInteractionGate interactionGate,
         IConsoleTerminal terminal,
-        IConsolePromptRenderer renderer,
-        IStatusMessageWriter statusMessageWriter)
+        IConsolePromptRenderer renderer)
     {
         _interactionGate = interactionGate;
         _terminal = terminal;
         _renderer = renderer;
-        _statusMessageWriter = statusMessageWriter;
     }
 
-    public async Task<T> PromptAsync<T>(SelectionPromptRequest<T> request, CancellationToken cancellationToken)
+    public Task<T> PromptAsync<T>(SelectionPromptRequest<T> request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
@@ -39,12 +36,16 @@ internal sealed class ConsoleSelectionPrompt : ISelectionPrompt
             throw new ArgumentOutOfRangeException(nameof(request), "Default index must reference a valid option.");
         }
 
-        return SupportsInteractiveSelection()
-            ? PromptInteractiveAsync(request, cancellationToken)
-            : await PromptFallbackAsync(request, cancellationToken);
+        if (!SupportsInteractiveSelection())
+        {
+            return Task.FromException<T>(
+                new InvalidOperationException("Selection prompts require an interactive terminal."));
+        }
+
+        return Task.FromResult(PromptInteractive(request, cancellationToken));
     }
 
-    private T PromptInteractiveAsync<T>(SelectionPromptRequest<T> request, CancellationToken cancellationToken)
+    private T PromptInteractive<T>(SelectionPromptRequest<T> request, CancellationToken cancellationToken)
     {
         using IDisposable _ = _interactionGate.EnterScope();
 
@@ -107,42 +108,6 @@ internal sealed class ConsoleSelectionPrompt : ISelectionPrompt
         finally
         {
             _renderer.ClearInteractiveSelectionPrompt(layout);
-        }
-    }
-
-    private async Task<T> PromptFallbackAsync<T>(SelectionPromptRequest<T> request, CancellationToken cancellationToken)
-    {
-        using IDisposable _ = _interactionGate.EnterScope();
-
-        _renderer.WriteFallbackSelectionPrompt(request);
-
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            _terminal.Write($"Selection [{request.DefaultIndex + 1}]: ");
-
-            string? input = _terminal.ReadLine();
-            if (input is null)
-            {
-                throw new PromptCancelledException("The input stream closed before a selection was made.");
-            }
-
-            string normalized = input.Trim();
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return request.Options[request.DefaultIndex].Value;
-            }
-
-            if (int.TryParse(normalized, out int selectedValue) &&
-                selectedValue >= 1 &&
-                selectedValue <= request.Options.Count)
-            {
-                return request.Options[selectedValue - 1].Value;
-            }
-
-            await _statusMessageWriter.ShowErrorAsync(
-                $"Enter a number between 1 and {request.Options.Count}.",
-                cancellationToken);
         }
     }
 

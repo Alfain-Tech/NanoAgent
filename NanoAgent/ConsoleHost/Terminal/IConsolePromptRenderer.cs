@@ -18,8 +18,6 @@ internal interface IConsolePromptRenderer
 
     void ClearInteractiveSelectionPrompt(InteractiveSelectionPromptLayout layout);
 
-    void WriteFallbackSelectionPrompt<T>(SelectionPromptRequest<T> request);
-
     void WriteSecretPrompt(SecretPromptRequest request);
 
     void WriteStatus(StatusMessageKind kind, string message);

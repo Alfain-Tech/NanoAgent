@@ -1,4 +1,3 @@
-using NanoAgent.Application.Abstractions;
 using NanoAgent.Application.Exceptions;
 using NanoAgent.Application.Models;
 using NanoAgent.ConsoleHost.Prompts;
@@ -6,7 +5,6 @@ using NanoAgent.ConsoleHost.Rendering;
 using NanoAgent.ConsoleHost.Terminal;
 using NanoAgent.Tests.ConsoleHost.TestDoubles;
 using FluentAssertions;
-using Moq;
 using System.Text;
 
 namespace NanoAgent.Tests.ConsoleHost.Prompts;
@@ -20,9 +18,7 @@ public sealed class ConsoleSelectionPromptTests
         terminal.EnqueueKey(new ConsoleKeyInfo('\0', ConsoleKey.DownArrow, false, false, false));
         terminal.EnqueueKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
 
-        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
-        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = CreateSut(terminal);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",
@@ -39,18 +35,15 @@ public sealed class ConsoleSelectionPromptTests
     }
 
     [Fact]
-    public async Task PromptAsync_Should_UseFallbackDefault_When_InteractiveControlsAreUnavailable_And_InputIsBlank()
+    public async Task PromptAsync_Should_Throw_When_InteractiveControlsAreUnavailable()
     {
         FakeConsoleTerminal terminal = new()
         {
             IsInputRedirected = true,
             IsOutputRedirected = true
         };
-        terminal.EnqueueLine(string.Empty);
 
-        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
-        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = CreateSut(terminal);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",
@@ -60,9 +53,11 @@ public sealed class ConsoleSelectionPromptTests
             ],
             DefaultIndex: 1);
 
-        string selectedValue = await sut.PromptAsync(request, CancellationToken.None);
+        Func<Task> action = () => sut.PromptAsync(request, CancellationToken.None);
 
-        selectedValue.Should().Be("compatible");
+        await action.Should()
+            .ThrowAsync<InvalidOperationException>()
+            .WithMessage("Selection prompts require an interactive terminal.");
     }
 
     [Fact]
@@ -71,9 +66,7 @@ public sealed class ConsoleSelectionPromptTests
         FakeConsoleTerminal terminal = new();
         terminal.EnqueueKey(new ConsoleKeyInfo('\0', ConsoleKey.Escape, false, false, false));
 
-        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
-        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = CreateSut(terminal);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",
@@ -97,9 +90,7 @@ public sealed class ConsoleSelectionPromptTests
         innerTerminal.EnqueueKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
 
         ThrowingCursorConsoleTerminal terminal = new(innerTerminal, top => top >= 40);
-        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
-        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = CreateSut(terminal);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",
@@ -123,9 +114,7 @@ public sealed class ConsoleSelectionPromptTests
         terminal.Write("Working 14 tokens est.  Esc to interrupt");
         terminal.EnqueueKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
 
-        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
-        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = CreateSut(terminal);
 
         SelectionPromptRequest<string> request = new(
             "Choose a provider",
@@ -148,9 +137,7 @@ public sealed class ConsoleSelectionPromptTests
         int statusTop = terminal.CursorTop;
         terminal.EnqueueKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
 
-        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
-        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = CreateSut(terminal);
 
         SelectionPromptRequest<string> request = new(
             "Approve file write?",
@@ -186,9 +173,7 @@ public sealed class ConsoleSelectionPromptTests
         terminal.Write("Working 55s - 229 tokens est.  Esc to interrupt");
         terminal.EnqueueKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
 
-        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
-        Mock<IStatusMessageWriter> statusMessageWriter = new(MockBehavior.Strict);
-        ConsoleSelectionPrompt sut = new(new ConsoleInteractionGate(), terminal, renderer, statusMessageWriter.Object);
+        ConsoleSelectionPrompt sut = CreateSut(terminal);
 
         SelectionPromptRequest<string> request = new(
             "Approve file write?",
@@ -256,6 +241,12 @@ public sealed class ConsoleSelectionPromptTests
         return count;
     }
 
+    private static ConsoleSelectionPrompt CreateSut(IConsoleTerminal terminal)
+    {
+        ConsolePromptRenderer renderer = new(terminal, SpectreConsoleFactory.Create(terminal));
+        return new ConsoleSelectionPrompt(new ConsoleInteractionGate(), terminal, renderer);
+    }
+
     private sealed class ThrowingCursorConsoleTerminal : IConsoleTerminal
     {
         private readonly FakeConsoleTerminal _inner;
@@ -269,21 +260,9 @@ public sealed class ConsoleSelectionPromptTests
             _shouldThrowForTop = shouldThrowForTop;
         }
 
-        public ConsoleColor BackgroundColor
-        {
-            get => _inner.BackgroundColor;
-            set => _inner.BackgroundColor = value;
-        }
-
         public int CursorLeft => _inner.CursorLeft;
 
         public int CursorTop => _inner.CursorTop;
-
-        public ConsoleColor ForegroundColor
-        {
-            get => _inner.ForegroundColor;
-            set => _inner.ForegroundColor = value;
-        }
 
         public bool IsInputRedirected => _inner.IsInputRedirected;
 
@@ -303,11 +282,6 @@ public sealed class ConsoleSelectionPromptTests
         public string? ReadLine()
         {
             return _inner.ReadLine();
-        }
-
-        public void ResetColor()
-        {
-            _inner.ResetColor();
         }
 
         public void SetCursorPosition(int left, int top)
@@ -350,13 +324,9 @@ public sealed class ConsoleSelectionPromptTests
                 .ToList();
         }
 
-        public ConsoleColor BackgroundColor { get; set; } = ConsoleColor.Black;
-
         public int CursorLeft => _cursorLeft;
 
         public int CursorTop { get; private set; }
-
-        public ConsoleColor ForegroundColor { get; set; } = ConsoleColor.Gray;
 
         public bool IsInputRedirected => false;
 
@@ -378,10 +348,6 @@ public sealed class ConsoleSelectionPromptTests
         public string? ReadLine()
         {
             throw new NotSupportedException();
-        }
-
-        public void ResetColor()
-        {
         }
 
         public void SetCursorPosition(int left, int top)

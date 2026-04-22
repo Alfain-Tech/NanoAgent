@@ -1,3 +1,4 @@
+using NanoAgent.ConsoleHost.Rendering;
 using NanoAgent.ConsoleHost.Terminal;
 using NanoAgent.Tests.ConsoleHost.TestDoubles;
 using FluentAssertions;
@@ -18,7 +19,7 @@ public sealed class ConsolePromptInputReaderTests
         terminal.EnqueueKey(new ConsoleKeyInfo('t', ConsoleKey.T, false, false, false));
         terminal.EnqueueKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
 
-        ConsolePromptInputReader sut = new(terminal);
+        ConsolePromptInputReader sut = new(terminal, SpectreConsoleFactory.Create(terminal));
 
         string result = await sut.ReadLineAsync(
             defaultValue: null,
