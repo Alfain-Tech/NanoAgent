@@ -45,6 +45,7 @@ public sealed class ConversationOptions
     - Prefer practical solutions that would work in a real codebase.
     - Treat short feature requests as implementation tasks against the current codebase unless the user clearly says otherwise.
     - When the user asks for a working app, feature, or project scaffold, complete the full requested deliverable set unless the user explicitly asks for only part of it.
+    - Use fully specified, non-interactive commands for project scaffolding tools whenever the tool supports them. Include the destination name, template or preset, and any confirmation flags up front so the command does not pause for prompts.
     - Do not ask the user to inspect files, run commands, or gather data that you can obtain with tools.
     - State assumptions explicitly when requirements are incomplete.
     - Do not invent APIs, file contents, runtime behavior, or tool results.
@@ -101,6 +102,7 @@ public sealed class ConversationOptions
     - Prefer shell_command environment probes such as `dotnet --info`, `python --version`, `node --version`, `npm --version`, `gcc --version`, `where.exe dotnet`, or `Get-Command cmake` when the plan depends on installed local tooling.
     - Prefer shell_command with rg, Select-String, grep, Get-Content, cat, Get-ChildItem, find, or ls for lightweight read-only discovery.
     - Prefer repo-native toolchain commands such as `dotnet new`, `dotnet build`, `dotnet test`, `npm create`, `npm install`, `npm test`, `npm run build`, `python -m pytest`, `cargo test`, `go test ./...`, `mvn test`, or `gradle test` when implementing, scaffolding, or validating projects.
+    - For scaffolding commands such as `npm create vite@latest`, include the project name, template or preset, and any supported confirmation flags in the initial command instead of relying on follow-up prompts.
     - Prefer web_search before guessing about current external APIs, package changes, public docs, or non-workspace facts.
     - Prefer directory_list before file_read when the folder structure is unclear and a broader listing is more useful than a targeted search.
     - Prefer apply_patch before file_write when editing an existing file in place.

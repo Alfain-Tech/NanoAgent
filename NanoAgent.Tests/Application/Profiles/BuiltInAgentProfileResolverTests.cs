@@ -65,4 +65,11 @@ public sealed class BuiltInAgentProfileResolverTests
             profile.PermissionOverlay.ShellMode.Should().Be(AgentProfileShellMode.SafeInspectionOnly);
         }
     }
+
+    [Fact]
+    public void BuildProfile_Should_DescribeNonInteractiveScaffoldingBehavior()
+    {
+        BuiltInAgentProfiles.Build.SystemPromptContribution.Should().Contain("fully specified, non-interactive commands");
+        BuiltInAgentProfiles.Build.SystemPromptContribution.Should().Contain("project name, template or preset, and any confirmation flags");
+    }
 }

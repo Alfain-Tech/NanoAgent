@@ -90,6 +90,8 @@ public sealed class AgentConversationPipelineTests
         requests[0].SystemPrompt.Should().Contain("planning_mode");
         requests[0].SystemPrompt.Should().Contain("installed build tools");
         requests[0].SystemPrompt.Should().Contain("separate verified facts from assumptions or open questions");
+        requests[0].SystemPrompt.Should().Contain("npm create vite@latest");
+        requests[0].SystemPrompt.Should().Contain("fully specified, non-interactive commands");
         requests[0].SystemPrompt.Should().Contain("one task at a time");
         requests[0].SystemPrompt.Should().NotContain("You are NanoAgent in Planning Mode.");
         requests[0].SystemPrompt.Should().NotContain("EXECUTION PHASE IS ACTIVE.");
@@ -413,6 +415,7 @@ public sealed class AgentConversationPipelineTests
         requests[0].SystemPrompt.Should().Contain("planning_mode");
         requests[0].SystemPrompt.Should().Contain("immediate next step first");
         requests[0].SystemPrompt.Should().Contain("high-quality ordered task list");
+        requests[0].SystemPrompt.Should().Contain("scaffold stays non-interactive");
         requests[0].SystemPrompt.Should().NotContain("You are NanoAgent in Planning Mode.");
         session.PendingExecutionPlan.Should().BeNull();
         session.ConversationHistory.Should().HaveCount(2);
@@ -511,6 +514,7 @@ public sealed class AgentConversationPipelineTests
         requests[0].SystemPrompt.Should().Contain("APPROVED EXECUTION PHASE IS ACTIVE.");
         requests[0].SystemPrompt.Should().Contain("one task at a time");
         requests[0].SystemPrompt.Should().Contain("1. Inspect the affected files.");
+        requests[0].SystemPrompt.Should().Contain("use fully specified, non-interactive commands");
         requests[0].Messages.Should().HaveCount(3);
         requests[0].Messages[0].Content.Should().Be("Help me plan this refactor");
         requests[0].Messages[1].Content.Should().Be(planningSummary);

@@ -52,6 +52,8 @@ public sealed class ConversationConfigurationAccessorTests
         result.SystemPrompt.Should().Contain("dotnet build");
         result.SystemPrompt.Should().Contain("npm test");
         result.SystemPrompt.Should().Contain("python -m pytest");
+        result.SystemPrompt.Should().Contain("fully specified, non-interactive commands for project scaffolding tools");
+        result.SystemPrompt.Should().Contain("npm create vite@latest");
         result.SystemPrompt.Should().Contain("Plan quality standards:");
         result.SystemPrompt.Should().Contain("A Codex-style plan starts with evidence from the repo");
         result.SystemPrompt.Should().Contain("high-quality task list");

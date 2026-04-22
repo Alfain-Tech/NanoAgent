@@ -140,6 +140,7 @@ internal static class PlanningModePolicy
         Execution plan for the current request:
         - Use the approved plan below as the task list.
         - Execute the work one task at a time using available tools when needed.
+        - When scaffold tooling is part of the plan, use fully specified, non-interactive commands that include the destination name, template or preset, and confirmation flags up front instead of waiting for interactive prompts.
         - Finish or deliberately revise the current task before moving to the next one.
         - Finish the requested work when practical.
         - In your final response, include:
@@ -159,6 +160,7 @@ internal static class PlanningModePolicy
         - Before planning, gather repo evidence with read-only tools instead of guessing.
         - When relevant, use `shell_command` to inspect the environment and check installed build tools, SDKs, compilers, package managers, or runtimes with safe probe commands such as `dotnet --info`, `python --version`, `node --version`, `gcc --version`, `where.exe dotnet`, or `Get-Command cmake`.
         - During execution, use `shell_command` for real toolchain work when it materially advances the task: scaffold projects, restore or install dependencies, run code generation, build, test, lint, format, or inspect runtime behavior.
+        - For project scaffolding commands such as `npm create vite@latest`, include the project name, template or preset, and any supported confirmation flags in the initial command so the scaffold stays non-interactive.
         - Prefer repo-native validation commands such as `dotnet build`, `dotnet test`, `npm test`, `npm run build`, `python -m pytest`, `cargo test`, `go test ./...`, `mvn test`, or `gradle test` when those toolchains are present.
         - A Codex-style plan should:
           - restate the objective clearly

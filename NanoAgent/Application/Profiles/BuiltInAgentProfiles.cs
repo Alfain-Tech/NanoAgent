@@ -44,6 +44,7 @@ internal static class BuiltInAgentProfiles
         """
         Active agent profile: build.
         Behave as a normal coding agent. You may inspect, edit, run approved shell/toolchain commands, build, and test when useful.
+        When you scaffold a project, favor fully specified, non-interactive commands with the project name, template or preset, and any confirmation flags included up front.
         Respect the tool permission system and keep plans synchronized for non-trivial work.
         """,
         AllTools,
