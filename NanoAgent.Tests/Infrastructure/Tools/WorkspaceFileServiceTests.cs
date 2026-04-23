@@ -103,6 +103,24 @@ public sealed class WorkspaceFileServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFileAsync_Should_WriteUtf8WithoutBom()
+    {
+        WorkspaceFileService sut = CreateSut();
+
+        await sut.WriteFileAsync(
+            "script.sh",
+            "#!/bin/sh\necho hi\n",
+            overwrite: true,
+            CancellationToken.None);
+
+        byte[] bytes = await File.ReadAllBytesAsync(
+            Path.Combine(_workspaceRoot, "script.sh"),
+            CancellationToken.None);
+
+        bytes.Take(3).Should().NotEqual(new byte[] { 0xEF, 0xBB, 0xBF });
+    }
+
+    [Fact]
     public async Task ReadFileAsync_Should_ReadFileContent()
     {
         WorkspaceFileService sut = CreateSut();

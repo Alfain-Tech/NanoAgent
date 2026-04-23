@@ -17,6 +17,8 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
     private const int FileWritePreviewContextLines = 1;
     private const int MaxFileWritePreviewLines = 8;
 
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
     private readonly IWorkspaceRootProvider _workspaceRootProvider;
 
     public WorkspaceFileService(IWorkspaceRootProvider workspaceRootProvider)
@@ -90,7 +92,7 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
             await File.WriteAllTextAsync(
                 fullPath,
                 state.Content!,
-                Encoding.UTF8,
+                Utf8NoBom,
                 cancellationToken);
         }
 
@@ -265,7 +267,7 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         await File.WriteAllTextAsync(
             fullPath,
             content,
-            Encoding.UTF8,
+            Utf8NoBom,
             cancellationToken);
 
         FileWritePreview preview = BuildFileWritePreview(previousContent, content);
@@ -341,7 +343,7 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         await File.WriteAllTextAsync(
             fullPath,
             content,
-            Encoding.UTF8,
+            Utf8NoBom,
             cancellationToken);
 
         return CreatePatchFileResult(
@@ -399,7 +401,7 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         await File.WriteAllTextAsync(
             destinationFullPath,
             updatedContent,
-            Encoding.UTF8,
+            Utf8NoBom,
             cancellationToken);
 
         if (!string.Equals(currentFullPath, destinationFullPath, GetPathComparison()) &&
