@@ -443,9 +443,7 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         string fullPath,
         bool recursive)
     {
-        IEnumerable<string> entries = recursive
-            ? Directory.EnumerateFileSystemEntries(fullPath, "*", SearchOption.AllDirectories)
-            : Directory.EnumerateFileSystemEntries(fullPath, "*", SearchOption.TopDirectoryOnly);
+        IEnumerable<string> entries = EnumerateFileSystemEntriesSafely(fullPath, recursive);
 
         return entries
             .OrderBy(static entry => entry, StringComparer.Ordinal)
@@ -466,7 +464,10 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
 
         IEnumerable<string> files = File.Exists(fullPath)
             ? [fullPath]
-            : Directory.EnumerateFiles(fullPath, "*", SearchOption.AllDirectories);
+            : Directory.Exists(fullPath)
+                ? EnumerateFilesSafely(fullPath, recursive: true)
+                : throw new FileNotFoundException(
+                    $"Search path '{request.Path ?? "."}' does not exist.");
 
         return files
             .OrderBy(static path => path, StringComparer.Ordinal)
@@ -489,10 +490,7 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         }
         else if (Directory.Exists(fullPath))
         {
-            filesToSearch.AddRange(Directory.EnumerateFiles(
-                fullPath,
-                "*",
-                SearchOption.AllDirectories));
+            filesToSearch.AddRange(EnumerateFilesSafely(fullPath, recursive: true));
         }
         else
         {
@@ -509,8 +507,8 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            FileInfo fileInfo = new(filePath);
-            if (fileInfo.Length > MaxSearchFileBytes)
+            if (!TryGetFileLength(filePath, out long fileLength) ||
+                fileLength > MaxSearchFileBytes)
             {
                 continue;
             }
@@ -528,6 +526,10 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
                 continue;
             }
             catch (InvalidDataException)
+            {
+                continue;
+            }
+            catch (Exception exception) when (IsFileSystemAccessException(exception))
             {
                 continue;
             }
@@ -554,6 +556,89 @@ internal sealed class WorkspaceFileService : IWorkspaceFileService
         }
 
         return matches;
+    }
+
+    private static IEnumerable<string> EnumerateFilesSafely(
+        string root,
+        bool recursive)
+    {
+        return EnumerateFileSystemEntriesSafely(root, recursive)
+            .Where(static entry => File.Exists(entry));
+    }
+
+    private static IEnumerable<string> EnumerateFileSystemEntriesSafely(
+        string root,
+        bool recursive)
+    {
+        Stack<string> pendingDirectories = new();
+        pendingDirectories.Push(root);
+
+        while (pendingDirectories.Count > 0)
+        {
+            string directoryPath = pendingDirectories.Pop();
+            string[] entries;
+            try
+            {
+                entries = Directory.GetFileSystemEntries(directoryPath);
+            }
+            catch (Exception exception) when (IsFileSystemAccessException(exception))
+            {
+                continue;
+            }
+
+            foreach (string entry in entries)
+            {
+                yield return entry;
+
+                if (recursive && ShouldRecurseIntoDirectory(entry))
+                {
+                    pendingDirectories.Push(entry);
+                }
+            }
+
+            if (!recursive)
+            {
+                yield break;
+            }
+        }
+    }
+
+    private static bool TryGetFileLength(
+        string path,
+        out long length)
+    {
+        try
+        {
+            length = new FileInfo(path).Length;
+            return true;
+        }
+        catch (Exception exception) when (IsFileSystemAccessException(exception))
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    private static bool ShouldRecurseIntoDirectory(string path)
+    {
+        try
+        {
+            FileAttributes attributes = File.GetAttributes(path);
+            return attributes.HasFlag(FileAttributes.Directory) &&
+                !attributes.HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch (Exception exception) when (IsFileSystemAccessException(exception))
+        {
+            return false;
+        }
+    }
+
+    private static bool IsFileSystemAccessException(Exception exception)
+    {
+        return exception is UnauthorizedAccessException or
+            IOException or
+            PathTooLongException or
+            System.Security.SecurityException;
     }
 
     private string ResolveWorkspacePath(
