@@ -25,7 +25,7 @@ public sealed class ConversationConfigurationAccessorTests
 
         result.SystemPrompt.Should().Be("test prompt");
         result.RequestTimeout.Should().Be(Timeout.InfiniteTimeSpan);
-        result.MaxToolRoundsPerTurn.Should().Be(32);
+        result.MaxToolRoundsPerTurn.Should().Be(0);
     }
 
     [Fact]
@@ -50,6 +50,7 @@ public sealed class ConversationConfigurationAccessorTests
         result.SystemPrompt.Should().Contain("dotnet --info");
         result.SystemPrompt.Should().Contain("Collaboration style:");
         result.SystemPrompt.Should().Contain("Never make the user do work that you can do with the available tools");
+        result.SystemPrompt.Should().Contain("call the tool instead of ending your message");
         result.SystemPrompt.Should().Contain("Make reasonable assumptions when the safest path is clear");
         result.SystemPrompt.Should().Contain("Persist until the task is handled end-to-end when practical");
         result.SystemPrompt.Should().Contain("Communication style:");
@@ -66,6 +67,7 @@ public sealed class ConversationConfigurationAccessorTests
         result.SystemPrompt.Should().Contain("validation commands");
         result.SystemPrompt.Should().Contain("visible plan synchronized");
         result.SystemPrompt.Should().Contain("Keep exactly one meaningful task in_progress");
+        result.SystemPrompt.Should().Contain("execute that step with a tool in the same turn");
         result.SystemPrompt.Should().Contain("Distinguish verified facts from assumptions or open questions");
         result.SystemPrompt.Should().Contain("If status is InvalidArguments");
         result.SystemPrompt.Should().Contain("call the same tool again");

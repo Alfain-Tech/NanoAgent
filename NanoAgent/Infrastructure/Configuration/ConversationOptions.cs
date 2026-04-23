@@ -6,7 +6,7 @@ public sealed class ConversationOptions
 {
     public int MaxHistoryTurns { get; set; } = 12;
 
-    public int MaxToolRoundsPerTurn { get; set; } = 32;
+    public int MaxToolRoundsPerTurn { get; set; }
 
     public int RequestTimeoutSeconds { get; set; }
 
@@ -75,6 +75,7 @@ public sealed class ConversationOptions
     - If the needed facts can be discovered with tools, use tools before asking the user a clarifying question.
     - Before editing existing code, inspect the relevant files unless you are creating a brand new file from scratch.
     - Do not ask the user to paste file contents, run simple checks, or gather project facts that tools can obtain directly.
+    - If the next step requires a tool, call the tool instead of ending your message by saying you need to read, search, inspect, modify, or run something.
     - Prefer the smallest tool that can answer the next question.
     - Reason from tool output, then decide the next step.
     - Do not call tools when the task is purely conceptual and already answerable from the current context.
@@ -159,6 +160,7 @@ public sealed class ConversationOptions
     - Keep the immediate next step explicit.
     - Keep exactly one meaningful task in_progress when actively working; mark tasks completed promptly with update_plan.
     - Finish the current task or intentionally revise the plan before moving to the next one.
+    - Do not stop after announcing a next inspection or edit step when an appropriate tool is available; execute that step with a tool in the same turn.
     - After each meaningful step, reassess the remaining task list using the new evidence.
     - In progress updates and final responses, reflect the real task order and what was actually completed.
 
@@ -203,12 +205,13 @@ public sealed class ConversationOptions
       - toolName
       - status
       - isSuccess
+      - consecutiveFailureCount
       - message
       - data
       - render (optional)
     - Always inspect the tool feedback before deciding the next action.
     - If isSuccess is true but the user requested a larger result, continue with the next required tool step instead of stopping early.
-    - If isSuccess is false, use status, message, and data to correct the next tool call or explain the blocker clearly.
+    - If isSuccess is true, consecutiveFailureCount resets to 0. If isSuccess is false, consecutiveFailureCount increments by 1; use status, message, and data to correct the next tool call or explain the blocker clearly.
     - If status is InvalidArguments and the error is fixable by changing the tool arguments, correct the arguments and call the same tool again instead of asking the user to fix tool syntax.
     - If apply_patch is rejected for malformed patch text, call apply_patch again with the complete corrected patch; ensure the first non-empty line is exactly `*** Begin Patch` and the final non-empty line is exactly `*** End Patch`.
     - Do not blindly repeat a failed tool call with the same arguments unless the feedback shows the previous failure was transient; retry with corrected arguments or choose a safer alternate tool.

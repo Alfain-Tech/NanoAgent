@@ -22,9 +22,9 @@ public sealed class ApplicationOptionsValidator : IValidateOptions<ApplicationOp
         {
             failures.Add($"{ApplicationOptions.SectionName}:Conversation:MaxHistoryTurns must be zero or greater.");
         }
-        else if (options.Conversation.MaxToolRoundsPerTurn <= 0)
+        else if (options.Conversation.MaxToolRoundsPerTurn < 0)
         {
-            failures.Add($"{ApplicationOptions.SectionName}:Conversation:MaxToolRoundsPerTurn must be greater than zero.");
+            failures.Add($"{ApplicationOptions.SectionName}:Conversation:MaxToolRoundsPerTurn must be zero or greater. Use zero for no tool-round limit.");
         }
 
         if (options.ModelSelection is null)

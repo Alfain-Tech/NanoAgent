@@ -71,17 +71,20 @@ internal sealed class ShellCommandService : IShellCommandService
 
         StringBuilder scriptBuilder = new();
         scriptBuilder.AppendLine("$ErrorActionPreference = 'Continue'");
+        scriptBuilder.AppendLine("$__nano_exit = 0");
+        scriptBuilder.AppendLine("$__nano_segment_exit = 0");
         scriptBuilder.AppendLine("function Invoke-NanoSegment([string]$encoded) {");
         scriptBuilder.AppendLine("  Set-Variable -Name LASTEXITCODE -Scope Global -Value 0 -Force");
+        scriptBuilder.AppendLine("  $script:__nano_segment_exit = 0");
         scriptBuilder.AppendLine("  $scriptText = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encoded))");
         scriptBuilder.AppendLine("  try {");
         scriptBuilder.AppendLine("    & ([ScriptBlock]::Create($scriptText))");
-        scriptBuilder.AppendLine("    if (-not $?) { return 1 }");
-        scriptBuilder.AppendLine("    return [int]$global:LASTEXITCODE");
+        scriptBuilder.AppendLine("    if (-not $?) { $script:__nano_segment_exit = 1; return }");
+        scriptBuilder.AppendLine("    $script:__nano_segment_exit = [int]$global:LASTEXITCODE");
         scriptBuilder.AppendLine("  }");
         scriptBuilder.AppendLine("  catch {");
         scriptBuilder.AppendLine("    Write-Error $_");
-        scriptBuilder.AppendLine("    return 1");
+        scriptBuilder.AppendLine("    $script:__nano_segment_exit = 1");
         scriptBuilder.AppendLine("  }");
         scriptBuilder.AppendLine("}");
 
@@ -90,7 +93,7 @@ internal sealed class ShellCommandService : IShellCommandService
             ShellCommandSegment segment = segments[index];
             string encodedSegment = Convert.ToBase64String(
                 Encoding.UTF8.GetBytes(segment.CommandText));
-            string invocation = $"$__nano_exit = Invoke-NanoSegment('{encodedSegment}')";
+            string invocation = $"Invoke-NanoSegment('{encodedSegment}'); $__nano_exit = $__nano_segment_exit";
 
             if (index == 0 || segment.Condition == ShellCommandSegmentCondition.Always)
             {

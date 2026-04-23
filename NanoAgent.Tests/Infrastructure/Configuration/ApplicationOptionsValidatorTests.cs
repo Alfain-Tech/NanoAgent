@@ -96,13 +96,34 @@ public sealed class ApplicationOptionsValidatorTests
     }
 
     [Fact]
-    public void Validate_Should_ReturnFailure_When_MaxToolRoundsPerTurnIsNotPositive()
+    public void Validate_Should_ReturnSuccess_When_MaxToolRoundsPerTurnIsZero()
     {
         ApplicationOptions options = new()
         {
             Conversation = new ConversationOptions
             {
                 MaxToolRoundsPerTurn = 0
+            },
+            Defaults = new ApplicationDefaultsOptions(),
+            ModelSelection = new ModelSelectionOptions
+            {
+                CacheDurationSeconds = 300
+            }
+        };
+
+        ValidateOptionsResult result = _sut.Validate(Options.DefaultName, options);
+
+        result.Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_Should_ReturnFailure_When_MaxToolRoundsPerTurnIsNegative()
+    {
+        ApplicationOptions options = new()
+        {
+            Conversation = new ConversationOptions
+            {
+                MaxToolRoundsPerTurn = -1
             },
             Defaults = new ApplicationDefaultsOptions(),
             ModelSelection = new ModelSelectionOptions

@@ -8,6 +8,7 @@ public sealed class ToolFeedbackPayload
         string toolName,
         ToolResultStatus status,
         bool isSuccess,
+        int consecutiveFailureCount,
         string message,
         JsonElement data,
         ToolFeedbackRenderPayload? render = null)
@@ -18,10 +19,13 @@ public sealed class ToolFeedbackPayload
         ToolName = toolName.Trim();
         Status = status;
         IsSuccess = isSuccess;
+        ConsecutiveFailureCount = Math.Max(0, consecutiveFailureCount);
         Message = message.Trim();
         Data = data.Clone();
         Render = render;
     }
+
+    public int ConsecutiveFailureCount { get; }
 
     public JsonElement Data { get; }
 

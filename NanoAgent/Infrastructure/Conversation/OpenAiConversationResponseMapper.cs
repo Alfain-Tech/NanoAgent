@@ -71,6 +71,13 @@ internal sealed class OpenAiConversationResponseMapper : IConversationResponseMa
 
         string? assistantMessage = ExtractAssistantMessage(message);
 
+        if (toolCalls.Count == 0 && ContainsRawToolCallMarkup(assistantMessage))
+        {
+            throw new ConversationResponseException(
+                CreateRawToolCallMarkupMessage(firstChoice, responseId),
+                isRetryableRawToolCallResponse: true);
+        }
+
         if (toolCalls.Count == 0 && assistantMessage is null)
         {
             throw new ConversationResponseException(
@@ -98,6 +105,23 @@ internal sealed class OpenAiConversationResponseMapper : IConversationResponseMa
             : $" Finish reason: {finishReason}.";
 
         return "The provider returned neither assistant content, a refusal, nor usable tool calls." +
+               finishReasonSuffix +
+               idSuffix;
+    }
+
+    private static string CreateRawToolCallMarkupMessage(
+        OpenAiChatCompletionChoice? choice,
+        string? responseId)
+    {
+        string? finishReason = NormalizeText(choice?.FinishReason);
+        string? idSuffix = NormalizeText(responseId) is string normalizedResponseId
+            ? $" Response id: {normalizedResponseId}."
+            : null;
+        string? finishReasonSuffix = finishReason is null
+            ? null
+            : $" Finish reason: {finishReason}.";
+
+        return "The provider returned raw tool-call markup in assistant content instead of a structured tool call." +
                finishReasonSuffix +
                idSuffix;
     }
@@ -133,6 +157,17 @@ internal sealed class OpenAiConversationResponseMapper : IConversationResponseMa
         }
 
         return NormalizeText(message.Refusal);
+    }
+
+    private static bool ContainsRawToolCallMarkup(string? assistantMessage)
+    {
+        if (assistantMessage is null)
+        {
+            return false;
+        }
+
+        return assistantMessage.Contains("<|channel>call:", StringComparison.Ordinal) ||
+            assistantMessage.Contains("<tool_call|>", StringComparison.Ordinal);
     }
 
     private static string? ExtractContentText(JsonElement content)

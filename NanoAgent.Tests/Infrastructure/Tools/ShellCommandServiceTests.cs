@@ -68,8 +68,34 @@ public sealed class ShellCommandServiceTests : IDisposable
         request.Arguments.Should().Contain("-Command");
         request.Arguments[^1].Should().Contain("Invoke-NanoSegment");
         request.Arguments[^1].Should().Contain("FromBase64String");
-        request.Arguments[^1].Should().Contain("$__nano_exit = Invoke-NanoSegment");
+        request.Arguments[^1].Should().Contain("$__nano_exit = $__nano_segment_exit");
+        request.Arguments[^1].Should().NotContain("$__nano_exit = Invoke-NanoSegment");
         request.Arguments[^1].Should().NotContain("&&");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_Should_RunRemainingWindowsSegments_When_FirstSegmentWritesOutput()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        ShellCommandService sut = new(
+            new ProcessRunner(),
+            new StubWorkspaceRootProvider(_workspaceRoot));
+
+        ShellCommandExecutionResult result = await sut.ExecuteAsync(
+            new ShellCommandExecutionRequest(
+                "mkdir todo && cd todo && Set-Content marker.txt ok",
+                null),
+            CancellationToken.None);
+
+        result.ExitCode.Should().Be(0);
+        File.ReadAllText(Path.Combine(_workspaceRoot, "todo", "marker.txt"))
+            .Trim()
+            .Should()
+            .Be("ok");
     }
 
     public void Dispose()

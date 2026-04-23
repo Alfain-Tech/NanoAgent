@@ -4,20 +4,37 @@ public sealed class ConversationResponseException : Exception
 {
     public ConversationResponseException(
         string message,
-        bool isRetryableEmptyResponse = false)
+        bool isRetryableEmptyResponse = false,
+        bool isRetryableRawToolCallResponse = false,
+        bool isRetryableIncompletePlanResponse = false)
         : base(message)
     {
         IsRetryableEmptyResponse = isRetryableEmptyResponse;
+        IsRetryableRawToolCallResponse = isRetryableRawToolCallResponse;
+        IsRetryableIncompletePlanResponse = isRetryableIncompletePlanResponse;
     }
 
     public ConversationResponseException(
         string message,
         Exception innerException,
-        bool isRetryableEmptyResponse = false)
+        bool isRetryableEmptyResponse = false,
+        bool isRetryableRawToolCallResponse = false,
+        bool isRetryableIncompletePlanResponse = false)
         : base(message, innerException)
     {
         IsRetryableEmptyResponse = isRetryableEmptyResponse;
+        IsRetryableRawToolCallResponse = isRetryableRawToolCallResponse;
+        IsRetryableIncompletePlanResponse = isRetryableIncompletePlanResponse;
     }
 
     public bool IsRetryableEmptyResponse { get; }
+
+    public bool IsRetryableRawToolCallResponse { get; }
+
+    public bool IsRetryableIncompletePlanResponse { get; }
+
+    public bool IsRetryableProviderOutput =>
+        IsRetryableEmptyResponse ||
+        IsRetryableRawToolCallResponse ||
+        IsRetryableIncompletePlanResponse;
 }

@@ -219,4 +219,34 @@ public sealed class OpenAiConversationResponseMapperTests
             .Which;
         exception.IsRetryableEmptyResponse.Should().BeTrue();
     }
+
+    [Fact]
+    public void Map_Should_MarkRawToolCallMarkupAsRetryable_When_ContentContainsProtocolMarkers()
+    {
+        OpenAiConversationResponseMapper sut = new();
+
+        Action action = () => sut.Map(new ConversationProviderPayload(
+            ProviderKind.OpenAiCompatible,
+            """
+            {
+              "id": "resp_raw_tool",
+              "choices": [
+                {
+                  "finish_reason": "stop",
+                  "message": {
+                    "content": "<|channel>call:update_plan{plan:[]}<tool_call|>"
+                  }
+                }
+              ]
+            }
+            """,
+            null));
+
+        ConversationResponseException exception = action.Should()
+            .Throw<ConversationResponseException>()
+            .WithMessage("*raw tool-call markup*Response id: resp_raw_tool*")
+            .Which;
+        exception.IsRetryableRawToolCallResponse.Should().BeTrue();
+        exception.IsRetryableProviderOutput.Should().BeTrue();
+    }
 }
